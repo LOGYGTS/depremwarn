@@ -1,4 +1,5 @@
-from flask import Flask, render_template, jsonify, send_from_directory
+import os
+from flask import Flask, render_template, jsonify
 import requests
 from datetime import datetime
 import re
@@ -14,6 +15,10 @@ def get_parantez_ici(title):
 @app.route("/")
 def index():
     return render_template("index.html")
+
+@app.route("/haritalar")
+def haritalar():
+    return render_template("haritalar.html")
 
 @app.route("/api/deprem")
 def deprem_api():
@@ -54,13 +59,6 @@ def onceki():
     except Exception as e:
         return f"Hata: {e}"
 
-@app.route("/haritalar")
-def haritalar():
-    return render_template("haritalar.html")
-
 if __name__ == "__main__":
-import os
-
-port = int(os.environ.get("PORT", 5000))
-app.run(host="0.0.0.0", port=port, debug=True)
-
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
