@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+  <meta charset="UTF-8">
+  <title>🗺️ Fay Haritaları</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(to right, #2c3e50, #3498db);
+      color: #fff;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 50px auto;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    }
+
+    h1,
+    h2 {
+      text-align: center;
+      color: #f1c40f;
+      margin-top: 30px;
+    }
+
+    .image-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .image-grid img {
+      width: 30%;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+      transition: transform 0.3s;
+    }
+
+    .image-grid img:hover {
+      transform: scale(1.05);
+    }
+
+    .menu {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .menu a {
+      background-color: #f39c12;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="menu">
+      <a href="/">🏠 Ana Sayfa</a>
+    </div>
+
+    <h1>🗺️ Fay Haritaları</h1>
+
+    <h2>Senaryo Haritaları</h2>
+    <div class="image-grid">
+      <img src="/static/1.png" alt="Senaryo 1">
+      <img src="/static/2.png" alt="Senaryo 2">
+      <img src="/static/3.png" alt="Senaryo 3">
+    </div>
+
+    <h2>Detaylı Fay Haritaları</h2>
+    <div class="image-grid">
+      <img src="/static/fay1.png" alt="Fay Haritası 1">
+      <img src="/static/fay2.png" alt="Fay Haritası 2">
+      <img src="/static/fay3.png" alt="Fay Haritası 3">
+    </div>
+  </div>
+</body>
+
+</html>
