@@ -1,86 +1,49 @@
-from flask import Flask, render_template, jsonify
-import requests
-from datetime import datetime
+# app.py
+from flask import Flask, render_template, abort
 import re
 
 app = Flask(__name__)
 
-API_URL = "https://api.orhanaydogdu.com.tr/deprem/kandilli/live"
-
-def get_parantez_ici(title):
-    match = re.search(r"\((.*?)\)", title)
-    return match.group(1) if match else None
-
-@app.template_filter("regex_search")
-def regex_search(s, pattern, group=1):
-    match = re.search(pattern, s)
-    return match.group(group) if match else s
+# Örnek deprem verisi (gerçekte API'den veya veri tabanından çekiyorsun)
+depremler = [
+    {
+        "date": "2024-06-10",
+        "title": "Manisa (Ege Bölgesi)",
+        "mag": 4.2,
+        "depth": 7.4,
+        "lat": 38.6,
+        "lng": 27.4,
+    },
+    {
+        "date": "2024-06-09",
+        "title": "Ankara (İç Anadolu)",
+        "mag": 3.6,
+        "depth": 5.0,
+        "lat": 39.9,
+        "lng": 32.8,
+    }
+]
 
 @app.route("/")
 def index():
-    return render_template("index.html")
-
-@app.route("/api/deprem")
-def deprem_api():
-    try:
-        data = requests.get(API_URL).json()["result"]
-        current = data[0]
-        bolge = get_parantez_ici(current["title"])
-        current_dt = datetime.strptime(current["date"], "%Y.%m.%d %H:%M:%S")
-
-        fark = "Önceki deprem bulunamadı"
-        for d in data[1:]:
-            if get_parantez_ici(d["title"]) == bolge:
-                dt = datetime.strptime(d["date"], "%Y.%m.%d %H:%M:%S")
-                dakika_fark = int((current_dt - dt).total_seconds() // 60)
-                fark = f"{dakika_fark} dk"
-                break
-
-        return jsonify({
-            "title": current["title"],
-            "mag": current["mag"],
-            "depth": current["depth"],
-            "date": current["date"],
-            "lat": current["geojson"]["coordinates"][1],
-            "lon": current["geojson"]["coordinates"][0],
-            "bolge": bolge,
-            "fark": fark
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)})
+    return "Ana Sayfa — /onceki ile önceki depremleri görebilirsiniz."
 
 @app.route("/onceki")
 def onceki():
-    try:
-        data = requests.get(API_URL).json()["result"]
-        return render_template("onceki.html", depremler=data)
-    except Exception as e:
-        return f"Hata: {e}"
+    return render_template("onceki.html", depremler=depremler)
 
-@app.route("/detay/<path:bolge>")
+@app.route("/detay/")
+def detay_bos():
+    return "Hatalı bağlantı. Lütfen /onceki sayfasından bir bölge seçin."
+
+@app.route("/detay/<bolge>")
 def detay(bolge):
-    try:
-        data = requests.get(API_URL).json()["result"]
-        bolgedeki = [d for d in data if get_parantez_ici(d["title"]) == bolge]
+    secilen = next((d for d in depremler if re.search(r'\((.*?)\)', d["title"]) and re.search(r'\((.*?)\)', d["title"]).group(1) == bolge), None)
+    if not secilen:
+        abort(404)
 
-        if not bolgedeki:
-            return f"{bolge} için detay bulunamadı."
-
-        son = bolgedeki[0]
-        onceki = bolgedeki[1] if len(bolgedeki) > 1 else None
-
-        fark = "Önceki deprem bulunamadı"
-        if onceki:
-            dt1 = datetime.strptime(son["date"], "%Y.%m.%d %H:%M:%S")
-            dt2 = datetime.strptime(onceki["date"], "%Y.%m.%d %H:%M:%S")
-            dakika_fark = int((dt1 - dt2).total_seconds() // 60)
-            fark = f"{dakika_fark} dk"
-
-        return render_template("detay.html", deprem=son, fark=fark)
-
-    except Exception as e:
-        return f"Hata: {e}"
+    risk = "Riskli" if secilen["mag"] >= 4.0 else "Normal"
+    return render_template("detay.html", deprem=secilen, risk=risk)
 
 if __name__ == "__main__":
     app.run(debug=True)
