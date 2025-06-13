@@ -2,9 +2,9 @@ from flask import Flask, render_template, jsonify
 import requests
 from datetime import datetime
 import re
+import os
 
 app = Flask(__name__)
-
 API_URL = "https://api.orhanaydogdu.com.tr/deprem/kandilli/live"
 
 def get_parantez_ici(title):
@@ -81,6 +81,7 @@ def detay(bolge):
     except Exception as e:
         return f"Hata: {e}"
 
+# 🔧 PORT SORUNUNU ÇÖZEN KISIM
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5000))  # Render uyumlu
     app.run(host="0.0.0.0", port=port)
