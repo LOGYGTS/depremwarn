@@ -1,38 +1,84 @@
-from flask import Flask, render_template, request, abort
-import json
+from flask import Flask, render_template, jsonify, request
+import requests
+from datetime import datetime
+import re
 import os
 
 app = Flask(__name__)
 
-# Sahte veriler / JSON dosyasindan okuma
-def load_data():
-    with open("depremler.json", "r", encoding="utf-8") as f:
-        return json.load(f)
+API_URL = "https://api.orhanaydogdu.com.tr/deprem/kandilli/live"
+
+def get_parantez_ici(title):
+    match = re.search(r"\\((.*?)\\)", title)
+    return match.group(1) if match else None
 
 @app.route("/")
 def index():
-    depremler = load_data()
-    return render_template("index.html", depremler=depremler)
+    return render_template("index.html")
+
+@app.route("/api/deprem")
+def deprem_api():
+    try:
+        data = requests.get(API_URL).json()["result"]
+        current = data[0]
+        bolge = get_parantez_ici(current["title"])
+        current_dt = datetime.strptime(current["date"], "%Y.%m.%d %H:%M:%S")
+
+        fark = "Önceki deprem bulunamadı"
+        for d in data[1:]:
+            if get_parantez_ici(d["title"]) == bolge:
+                dt = datetime.strptime(d["date"], "%Y.%m.%d %H:%M:%S")
+                dakika_fark = int((current_dt - dt).total_seconds() // 60)
+                fark = f"{dakika_fark} dk"
+                break
+
+        return jsonify({
+            "title": current["title"],
+            "mag": current["mag"],
+            "depth": current["depth"],
+            "date": current["date"],
+            "lat": current["geojson"]["coordinates"][1],
+            "lon": current["geojson"]["coordinates"][0],
+            "bolge": bolge,
+            "fark": fark
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 @app.route("/onceki")
 def onceki():
-    depremler = load_data()
-    return render_template("onceki.html", depremler=depremler)
+    try:
+        data = requests.get(API_URL).json()["result"]
+        return render_template("onceki.html", depremler=data)
+    except Exception as e:
+        return f"Hata: {e}"
 
-@app.route("/detay/<region>")
-def detay(region):
-    depremler = load_data()
-    secilen = [d for d in depremler if region.lower() in d["title"].lower()]
-    if not secilen:
-        abort(404)
+@app.route("/detay/<bolge>")
+def detay(bolge):
+    try:
+        data = requests.get(API_URL).json()["result"]
+        secili = None
+        current_dt = None
+        for d in data:
+            if get_parantez_ici(d["title"]) == bolge:
+                secili = d
+                current_dt = datetime.strptime(d["date"], "%Y.%m.%d %H:%M:%S")
+                break
 
-    detay = secilen[0]
-    risk = "Normal"
-    if float(detay["mag"]) >= 5.0:
-        risk = "Riskli"
+        fark = "Önceki deprem bulunamadı"
+        for d in data:
+            if get_parantez_ici(d["title"]) == bolge and d != secili:
+                dt = datetime.strptime(d["date"], "%Y.%m.%d %H:%M:%S")
+                dakika_fark = int((current_dt - dt).total_seconds() // 60)
+                fark = f"{dakika_fark} dk"
+                break
 
-    return render_template("detay.html", detay=detay, risk=risk)
+        return render_template("detay.html", deprem=secili, bolge=bolge, fark=fark)
+
+    except Exception as e:
+        return f"Hata: {e}"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(debug=True, host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port)
