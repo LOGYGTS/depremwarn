@@ -11,6 +11,11 @@ def get_parantez_ici(title):
     match = re.search(r"\((.*?)\)", title)
     return match.group(1) if match else None
 
+@app.template_filter("regex_search")
+def regex_search(s, pattern, group=1):
+    match = re.search(pattern, s)
+    return match.group(group) if match else s
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -57,20 +62,25 @@ def onceki():
 def detay(bolge):
     try:
         data = requests.get(API_URL).json()["result"]
-        for d in data:
-            if get_parantez_ici(d["title"]) == bolge:
-                deprem = d
-                break
-        else:
-            return "Deprem verisi bulunamadı"
+        bolgedeki = [d for d in data if get_parantez_ici(d["title"]) == bolge]
 
-        bolge = get_parantez_ici(deprem["title"])
-        return render_template("detay.html", deprem=deprem, bolge=bolge)
+        if not bolgedeki:
+            return f"{bolge} için detay bulunamadı."
+
+        son = bolgedeki[0]
+        onceki = bolgedeki[1] if len(bolgedeki) > 1 else None
+
+        fark = "Önceki deprem bulunamadı"
+        if onceki:
+            dt1 = datetime.strptime(son["date"], "%Y.%m.%d %H:%M:%S")
+            dt2 = datetime.strptime(onceki["date"], "%Y.%m.%d %H:%M:%S")
+            dakika_fark = int((dt1 - dt2).total_seconds() // 60)
+            fark = f"{dakika_fark} dk"
+
+        return render_template("detay.html", deprem=son, fark=fark)
+
     except Exception as e:
         return f"Hata: {e}"
 
-# Render için PORT ayarı
-import os
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(debug=True)
