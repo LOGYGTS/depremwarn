@@ -2,35 +2,45 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <title>📌 Deprem Detay</title>
+  <title>🌍 Detaylı Deprem Bilgisi</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
-      background: #2c3e50;
+      background: linear-gradient(to right, #2c3e50, #3498db);
       color: white;
+      margin: 0;
       padding: 20px;
     }
     .container {
-      max-width: 800px;
-      margin: auto;
-      background: rgba(0,0,0,0.4);
-      padding: 20px;
+      max-width: 700px;
+      margin: 50px auto;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 30px;
       border-radius: 15px;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
     }
     h1 {
       color: #f1c40f;
       text-align: center;
     }
-    #map {
-      height: 400px;
-      border-radius: 10px;
+    .uyari {
       margin-top: 20px;
-    }
-    .risk {
+      padding: 15px;
+      border-radius: 10px;
       font-weight: bold;
-      font-size: 18px;
-      color: {{ 'red' if risk == 'Riskli' else 'lime' }};
+    }
+    .riskli {
+      background-color: #e74c3c;
+    }
+    .normal {
+      background-color: #2ecc71;
+    }
+    #map {
+      height: 300px;
+      margin-top: 20px;
+      border-radius: 10px;
     }
     a {
       color: #f1c40f;
@@ -40,24 +50,33 @@
 </head>
 <body>
   <div class="container">
-    <a href="/onceki">← Önceki Depremler</a>
-    <h1>{{ deprem.title }} Detayları</h1>
-    <p><strong>Tarih:</strong> {{ deprem.date }}</p>
-    <p><strong>Büyüklük:</strong> {{ deprem.mag }}</p>
-    <p><strong>Derinlik:</strong> {{ deprem.depth }} km</p>
-    <p class="risk">⚠️ Risk Durumu: {{ risk }}</p>
+    <a href="/onceki">← Geri</a>
+    <h1>{{ deprem.title }}</h1>
+    <p>📅 Tarih: {{ deprem.date }}</p>
+    <p>💥 Büyüklük: {{ deprem.mag }} ML</p>
+    <p>🌡️ Derinlik: {{ deprem.depth }} km</p>
+
+    <div id="uyari" class="uyari {{ 'riskli' if deprem.mag|float >= 4.0 else 'normal' }}">
+      {% if deprem.mag|float >= 4.0 %}
+      ⚠️ Bu deprem riskli seviyede olabilir!
+      {% else %}
+      ✅ Normal bir deprem düzeyi.
+      {% endif %}
+    </div>
+
     <div id="map"></div>
   </div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    const map = L.map('map').setView([{{ deprem.lat }}, {{ deprem.lng }}], 7);
+    const lat = {{ deprem.geojson.coordinates[1] }};
+    const lon = {{ deprem.geojson.coordinates[0] }};
+    const title = "{{ deprem.title }}";
+
+    const map = L.map('map').setView([lat, lon], 7);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
+      attribution: '© OpenStreetMap'
     }).addTo(map);
-    L.marker([{{ deprem.lat }}, {{ deprem.lng }}]).addTo(map)
-      .bindPopup('{{ deprem.title }}<br>Büyüklük: {{ deprem.mag }}')
-      .openPopup();
+    L.marker([lat, lon]).addTo(map).bindPopup(title).openPopup();
   </script>
 </body>
 </html>
