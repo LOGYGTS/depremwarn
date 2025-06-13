@@ -1,51 +1,38 @@
-# app.py
-from flask import Flask, render_template, abort
-import re
+from flask import Flask, render_template, request, abort
+import json
+import os
 
 app = Flask(__name__)
 
-# Örnek deprem verisi (gerçekte API'den veya veri tabanından çekiyorsun)
-depremler = [
-    {
-        "date": "2024-06-10",
-        "title": "Manisa (Ege Bölgesi)",
-        "mag": 4.2,
-        "depth": 7.4,
-        "lat": 38.6,
-        "lng": 27.4,
-    },
-    {
-        "date": "2024-06-09",
-        "title": "Ankara (İç Anadolu)",
-        "mag": 3.6,
-        "depth": 5.0,
-        "lat": 39.9,
-        "lng": 32.8,
-    }
-]
+# Sahte veriler / JSON dosyasindan okuma
+def load_data():
+    with open("depremler.json", "r", encoding="utf-8") as f:
+        return json.load(f)
 
 @app.route("/")
 def index():
-    return "Ana Sayfa — /onceki ile önceki depremleri görebilirsiniz."
+    depremler = load_data()
+    return render_template("index.html", depremler=depremler)
 
 @app.route("/onceki")
 def onceki():
+    depremler = load_data()
     return render_template("onceki.html", depremler=depremler)
 
-@app.route("/detay/")
-def detay_bos():
-    return "Hatalı bağlantı. Lütfen /onceki sayfasından bir bölge seçin."
-
-@app.route("/detay/<bolge>")
-def detay(bolge):
-    secilen = next((d for d in depremler if re.search(r'\((.*?)\)', d["title"]) and re.search(r'\((.*?)\)', d["title"]).group(1) == bolge), None)
+@app.route("/detay/<region>")
+def detay(region):
+    depremler = load_data()
+    secilen = [d for d in depremler if region.lower() in d["title"].lower()]
     if not secilen:
         abort(404)
 
-    risk = "Riskli" if secilen["mag"] >= 4.0 else "Normal"
-    return render_template("detay.html", deprem=secilen, risk=risk)
+    detay = secilen[0]
+    risk = "Normal"
+    if float(detay["mag"]) >= 5.0:
+        risk = "Riskli"
+
+    return render_template("detay.html", detay=detay, risk=risk)
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(debug=True, host="0.0.0.0", port=port)
