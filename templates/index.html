@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="tr">
+
 <head>
   <meta charset="UTF-8">
   <title>🌍 Kandilli Deprem Takip</title>
@@ -10,7 +11,7 @@
       font-family: 'Segoe UI', sans-serif;
       margin: 0;
       padding: 0;
-      background: linear-gradient(to right, #2c3e50, #3498db); /* Eski mavi degrade */
+      background: linear-gradient(to right, #2c3e50, #3498db);
       color: #fff;
     }
 
@@ -68,9 +69,34 @@
       margin-top: 20px;
       border-radius: 10px;
     }
+
+    .harita-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 999;
+    }
+
+    .harita-btn a {
+      background-color: #f39c12;
+      color: white;
+      padding: 8px 14px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .harita-btn a:hover {
+      background-color: #e67e22;
+    }
   </style>
 </head>
+
 <body>
+  <div class="harita-btn">
+    <a href="/static">🗺️ Haritalar</a>
+  </div>
+
   <div class="container">
     <h1>🌍 Kandilli Deprem Takip</h1>
 
@@ -146,4 +172,5 @@
     setInterval(depremVerisi, 60000);
   </script>
 </body>
+
 </html>
