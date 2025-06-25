@@ -31,59 +31,49 @@
       color: #f1c40f;
       text-decoration: none;
       font-weight: bold;
-      display: inline-block;
-      margin-bottom: 15px;
-    }
-    a:hover {
-      text-decoration: underline;
     }
 
     table {
       width: 100%;
       border-collapse: collapse;
-      background-color: rgba(255,255,255,0.1);
-      color: #fff;
+      margin-top: 20px;
     }
 
     th, td {
-      padding: 10px 12px;
-      border: 1px solid rgba(255,255,255,0.2);
+      padding: 10px;
       text-align: center;
+      border: 1px solid #ddd;
     }
 
     th {
-      background-color: rgba(241, 196, 15, 0.8);
+      background: #f1c40f;
       color: #2c3e50;
     }
 
     tr:nth-child(even) {
-      background-color: rgba(255,255,255,0.15);
+      background-color: rgba(255, 255, 255, 0.1);
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <a href="/">← Ana Sayfaya Dön</a>
+    <a href="/">← Ana Sayfa</a>
     <h1>📜 Önceki Depremler</h1>
     <table>
-      <thead>
-        <tr>
-          <th>Tarih</th>
-          <th>Bölge</th>
-          <th>Büyüklük</th>
-          <th>Derinlik (km)</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for d in depremler %}
-        <tr>
-          <td>{{ d.date }}</td>
-          <td>{{ d.title }}</td>
-          <td>{{ d.mag }}</td>
-          <td>{{ d.depth }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
+      <tr>
+        <th>Tarih</th>
+        <th>Bölge</th>
+        <th>Büyüklük</th>
+        <th>Derinlik (km)</th>
+      </tr>
+      {% for d in depremler %}
+      <tr>
+        <td>{{ d.date }}</td>
+        <td><a href="/detay/{{ d.bolge }}">{{ d.title }}</a></td>
+        <td>{{ d.mag }}</td>
+        <td>{{ d.depth }}</td>
+      </tr>
+      {% endfor %}
     </table>
   </div>
 </body>

@@ -1,9 +1,8 @@
 <!DOCTYPE html>
 <html lang="tr">
-
 <head>
   <meta charset="UTF-8">
-  <title>🌍 Kandilli Deprem Takip</title>
+  <title>🌍 Deprem Takip</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <style>
@@ -16,7 +15,7 @@
     }
 
     .container {
-      max-width: 600px;
+      max-width: 700px;
       margin: 100px auto;
       background: rgba(0, 0, 0, 0.4);
       padding: 30px;
@@ -36,14 +35,19 @@
       margin-bottom: 20px;
     }
 
-    .menu a {
+    .menu a, .source-btn {
       background-color: #f39c12;
       color: white;
       padding: 10px 20px;
       border-radius: 8px;
       text-decoration: none;
       font-weight: bold;
-      margin: 0 5px;
+      margin: 5px;
+      display: inline-block;
+    }
+
+    .source-btn.active {
+      background-color: #e67e22;
     }
 
     .deprem-info {
@@ -70,35 +74,42 @@
       border-radius: 10px;
     }
 
-    .harita-btn {
-      position: absolute;
-      top: -60px;
-      left: 10px;
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
     }
 
-    .harita-btn a {
-      background-color: #f39c12;
-      color: white;
-      padding: 8px 14px;
-      border-radius: 10px;
-      text-decoration: none;
-      font-weight: bold;
+    .left-buttons, .right-buttons {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 600px) {
+      .top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+      }
     }
   </style>
 </head>
-
 <body>
   <div class="container">
-
-    <div class="harita-btn">
-      <a href="/haritalar">🗺️ Haritalar</a>
+    <div class="top-bar">
+      <div class="left-buttons">
+        <a class="menu" href="/haritalar">🗺️ Haritalar</a>
+        <a class="menu" href="/onceki">📜 Önceki Depremler</a>
+      </div>
+      <div class="right-buttons">
+        <button class="source-btn active" data-source="kandilli">Kandilli</button>
+        <button class="source-btn" data-source="emsc">EMSC</button>
+      </div>
     </div>
 
-    <h1>🌍 Kandilli Deprem Takip</h1>
-
-    <div class="menu">
-      <a href="/onceki">📜 Önceki Depremler</a>
-    </div>
+    <h1>🌍 Deprem Takip</h1>
 
     <div id="bilgi" class="deprem-info">Yükleniyor...</div>
     <div id="uyari" class="uyari"></div>
@@ -107,11 +118,20 @@
 
   <script>
     let map;
+    let currentSource = "kandilli";
+
+    document.querySelectorAll('.source-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.source-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSource = btn.dataset.source;
+        depremVerisi();
+      });
+    });
 
     function haritayiGuncelle(lat, lon, yer, mag) {
       if (!map) {
         map = L.map('map').setView([lat, lon], 7);
-
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '© OpenStreetMap'
         }).addTo(map);
@@ -126,7 +146,7 @@
 
     async function depremVerisi() {
       try {
-        const res = await fetch("/api/deprem");
+        const res = await fetch(`/api/deprem?source=${currentSource}`);
         const data = await res.json();
 
         if (data.error) {
@@ -141,12 +161,11 @@
           🌡️ Derinlik: ${data.depth} km<br>
           🕒 Aynı bölgede önceki fark: ${data.fark}
         `;
-
         document.getElementById("bilgi").innerHTML = bilgi;
 
         const uyari = document.getElementById("uyari");
 
-        if (data.fark !== "Önceki deprem bulunamadı") {
+        if (data.fark.includes("dk")) {
           const dakika = parseInt(data.fark);
           if (!isNaN(dakika) && dakika < 15) {
             uyari.style.display = "block";
@@ -172,5 +191,4 @@
     setInterval(depremVerisi, 60000);
   </script>
 </body>
-
 </html>
