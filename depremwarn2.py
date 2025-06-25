@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, send_from_directory
 import requests
 from datetime import datetime
 import re
@@ -9,7 +9,7 @@ API_URL = "https://api.orhanaydogdu.com.tr/deprem/kandilli/live"
 
 def get_parantez_ici(title):
     match = re.search(r"\((.*?)\)", title)
-    return match.group(1) if match else "Bilinmeyen"
+    return match.group(1) if match else None
 
 @app.route("/")
 def index():
@@ -27,8 +27,9 @@ def deprem_api():
         for d in data[1:]:
             if get_parantez_ici(d["title"]) == bolge:
                 dt = datetime.strptime(d["date"], "%Y.%m.%d %H:%M:%S")
-                dakika_fark = int((current_dt - dt).total_seconds() // 60)
-                fark = f"{dakika_fark} dk"
+                fark_dk = int((current_dt - dt).total_seconds() // 60)
+                if fark_dk >= 0:
+                    fark = f"{fark_dk} dakika önce"
                 break
 
         return jsonify({
@@ -36,10 +37,10 @@ def deprem_api():
             "mag": current["mag"],
             "depth": current["depth"],
             "date": current["date"],
-            "lat": current["geojson"]["coordinates"][1],
-            "lon": current["geojson"]["coordinates"][0],
             "bolge": bolge,
-            "fark": fark
+            "fark": fark,
+            "lat": current["geojson"]["coordinates"][1],
+            "lon": current["geojson"]["coordinates"][0]
         })
 
     except Exception as e:
@@ -49,39 +50,13 @@ def deprem_api():
 def onceki():
     try:
         data = requests.get(API_URL).json()["result"]
-        for d in data:
-            d["bolge"] = get_parantez_ici(d["title"])
         return render_template("onceki.html", depremler=data)
     except Exception as e:
         return f"Hata: {e}"
 
-@app.route("/detay/<bolge>")
-def detay(bolge):
-    try:
-        data = requests.get(API_URL).json()["result"]
-        secili = None
-        onceki = None
-
-        for i, d in enumerate(data):
-            if get_parantez_ici(d["title"]) == bolge:
-                secili = d
-                for diger in data[i+1:]:
-                    if get_parantez_ici(diger["title"]) == bolge:
-                        secili_dt = datetime.strptime(d["date"], "%Y.%m.%d %H:%M:%S")
-                        diger_dt = datetime.strptime(diger["date"], "%Y.%m.%d %H:%M:%S")
-                        fark = int((secili_dt - diger_dt).total_seconds() // 60)
-                        onceki = fark
-                        break
-                break
-
-        if not secili:
-            return f"{bolge} bölgesi için deprem verisi bulunamadı."
-
-        return render_template("detay.html", deprem=secili, bolge=bolge, fark=onceki)
-    except Exception as e:
-        return f"Hata: {e}"
+@app.route("/haritalar")
+def haritalar():
+    return render_template("haritalar.html")
 
 if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))  # Render uyumlu
-    app.run(debug=True, host="0.0.0.0", port=port)
+    app.run(debug=True)
