@@ -1,139 +1,87 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-  <meta charset="UTF-8">
-  <title>🌍 Deprem Takip</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f4f4f4;
-      color: #333;
-      margin: 0;
-      padding: 0;
-    }
-    .container {
-      max-width: 700px;
-      margin: 40px auto;
-      background: #fff;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 0 15px rgba(0,0,0,0.2);
-    }
-    h1 {
-      text-align: center;
-    }
-    .menu {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    .menu a {
-      text-decoration: none;
-      background: #3498db;
-      color: white;
-      padding: 10px 20px;
-      border-radius: 6px;
-      margin: 0 5px;
-    }
-    .uyari {
-      margin-top: 15px;
-      padding: 10px;
-      border-radius: 6px;
-      display: none;
-      font-weight: bold;
-    }
-    .ok {
-      background-color: #2ecc71;
-      color: white;
-    }
-    .kritik {
-      background-color: #e74c3c;
-      color: white;
-    }
-    #map {
-      height: 300px;
-      margin-top: 20px;
-      border-radius: 10px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>🌍 Kandilli Deprem Takip</h1>
+from flask import Flask, render_template, jsonify
+import requests
+from datetime import datetime
+import re
 
-    <div class="menu">
-      <a href="/onceki">📜 Önceki Depremler</a>
-    </div>
+app = Flask(__name__)
 
-    <div id="bilgi" class="deprem-info">Yükleniyor...</div>
-    <div id="uyari" class="uyari"></div>
-    <div id="map"></div>
-  </div>
+API_URL = "https://api.orhanaydogdu.com.tr/deprem/kandilli/live"
 
-  <script>
-    let map;
+def get_parantez_ici(title):
+    match = re.search(r"\((.*?)\)", title)
+    return match.group(1) if match else "Bilinmeyen"
 
-    function haritayiGuncelle(lat, lon, yer, mag) {
-      if (!map) {
-        map = L.map('map').setView([lat, lon], 7);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap'
-        }).addTo(map);
-      } else {
-        map.setView([lat, lon], 7);
-      }
+@app.route("/")
+def index():
+    return render_template("index.html")
 
-      L.marker([lat, lon]).addTo(map)
-        .bindPopup(`<b>${yer}</b><br>💥 Büyüklük: ${mag}`)
-        .openPopup();
-    }
+@app.route("/api/deprem")
+def deprem_api():
+    try:
+        data = requests.get(API_URL).json()["result"]
+        current = data[0]
+        bolge = get_parantez_ici(current["title"])
+        current_dt = datetime.strptime(current["date"], "%Y.%m.%d %H:%M:%S")
 
-    async function depremVerisi() {
-      try {
-        const res = await fetch("/api/deprem");
-        const data = await res.json();
+        fark = "Önceki deprem bulunamadı"
+        for d in data[1:]:
+            if get_parantez_ici(d["title"]) == bolge:
+                dt = datetime.strptime(d["date"], "%Y.%m.%d %H:%M:%S")
+                dakika_fark = int((current_dt - dt).total_seconds() // 60)
+                fark = f"{dakika_fark} dk"
+                break
 
-        if (data.error) {
-          document.getElementById("bilgi").innerText = "Hata: " + data.error;
-          return;
-        }
+        return jsonify({
+            "title": current["title"],
+            "mag": current["mag"],
+            "depth": current["depth"],
+            "date": current["date"],
+            "lat": current["geojson"]["coordinates"][1],
+            "lon": current["geojson"]["coordinates"][0],
+            "bolge": bolge,
+            "fark": fark
+        })
 
-        document.getElementById("bilgi").innerHTML = `
-          📍 Yer: ${data.title}<br>
-          📅 Tarih: ${data.date}<br>
-          💥 Büyüklük: ${data.mag} ML<br>
-          🌡️ Derinlik: ${data.depth} km<br>
-          🕒 Önceki fark: ${data.fark}
-        `;
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
-        const uyari = document.getElementById("uyari");
+@app.route("/onceki")
+def onceki():
+    try:
+        data = requests.get(API_URL).json()["result"]
+        for d in data:
+            d["bolge"] = get_parantez_ici(d["title"])
+        return render_template("onceki.html", depremler=data)
+    except Exception as e:
+        return f"Hata: {e}"
 
-        if (data.fark.includes("dk")) {
-          const dakika = parseInt(data.fark);
-          if (!isNaN(dakika) && dakika < 15) {
-            uyari.style.display = "block";
-            uyari.innerText = "⚠️ Uyarı: Aynı bölgede kısa sürede birden fazla deprem algılandı!";
-            uyari.classList.remove("ok");
-            uyari.classList.add("kritik");
-          } else {
-            uyari.style.display = "block";
-            uyari.innerText = "🟢 Her şey normal.";
-            uyari.classList.remove("kritik");
-            uyari.classList.add("ok");
-          }
-        } else {
-          uyari.style.display = "none";
-        }
+@app.route("/detay/<bolge>")
+def detay(bolge):
+    try:
+        data = requests.get(API_URL).json()["result"]
+        secili = None
+        onceki = None
 
-        haritayiGuncelle(data.lat, data.lon, data.title, data.mag);
-      } catch (err) {
-        document.getElementById("bilgi").innerText = "Veri alınamadı.";
-      }
-    }
+        for i, d in enumerate(data):
+            if get_parantez_ici(d["title"]) == bolge:
+                secili = d
+                for diger in data[i+1:]:
+                    if get_parantez_ici(diger["title"]) == bolge:
+                        secili_dt = datetime.strptime(d["date"], "%Y.%m.%d %H:%M:%S")
+                        diger_dt = datetime.strptime(diger["date"], "%Y.%m.%d %H:%M:%S")
+                        fark = int((secili_dt - diger_dt).total_seconds() // 60)
+                        onceki = fark
+                        break
+                break
 
-    depremVerisi();
-    setInterval(depremVerisi, 60000);
-  </script>
-</body>
-</html>
+        if not secili:
+            return f"{bolge} bölgesi için deprem verisi bulunamadı."
+
+        return render_template("detay.html", deprem=secili, bolge=bolge, fark=onceki)
+    except Exception as e:
+        return f"Hata: {e}"
+
+if __name__ == "__main__":
+    import os
+    port = int(os.environ.get("PORT", 5000))  # Render uyumlu
+    app.run(debug=True, host="0.0.0.0", port=port)
