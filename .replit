@@ -1,1 +1,1 @@
-run = "python -m repl-nix-workspace"
+run = "depremwarn2.py.py"
