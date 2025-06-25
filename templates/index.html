@@ -15,26 +15,9 @@
       color: #fff;
     }
 
-    .header {
-      text-align: center;
-      padding: 20px;
-      background-color: rgba(0, 0, 0, 0.3);
-    }
-
-    .header a {
-      display: inline-block;
-      margin: 0 10px;
-      padding: 10px 20px;
-      background-color: #f39c12;
-      color: white;
-      border-radius: 8px;
-      text-decoration: none;
-      font-weight: bold;
-    }
-
     .container {
       max-width: 600px;
-      margin: 30px auto;
+      margin: 100px auto;
       background: rgba(0, 0, 0, 0.4);
       padding: 30px;
       border-radius: 15px;
@@ -86,18 +69,36 @@
       margin-top: 20px;
       border-radius: 10px;
     }
+
+    .harita-btn {
+      position: absolute;
+      top: -60px;
+      left: 10px;
+    }
+
+    .harita-btn a {
+      background-color: #f39c12;
+      color: white;
+      padding: 8px 14px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: bold;
+    }
   </style>
 </head>
 
 <body>
-
-  <div class="header">
-    <a href="/haritalar">🗺️ Haritalar</a>
-    <a href="/onceki">📜 Önceki Depremler</a>
-  </div>
-
   <div class="container">
+
+    <div class="harita-btn">
+      <a href="/haritalar">🗺️ Haritalar</a>
+    </div>
+
     <h1>🌍 Kandilli Deprem Takip</h1>
+
+    <div class="menu">
+      <a href="/onceki">📜 Önceki Depremler</a>
+    </div>
 
     <div id="bilgi" class="deprem-info">Yükleniyor...</div>
     <div id="uyari" class="uyari"></div>
@@ -110,6 +111,7 @@
     function haritayiGuncelle(lat, lon, yer, mag) {
       if (!map) {
         map = L.map('map').setView([lat, lon], 7);
+
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '© OpenStreetMap'
         }).addTo(map);
@@ -132,21 +134,23 @@
           return;
         }
 
-        document.getElementById("bilgi").innerHTML = `
+        let bilgi = `
           📍 Yer: ${data.title}<br>
           📅 Tarih: ${data.date}<br>
           💥 Büyüklük: ${data.mag} ML<br>
           🌡️ Derinlik: ${data.depth} km<br>
-          🕒 Önceki fark: ${data.fark}
+          🕒 Aynı bölgede önceki fark: ${data.fark}
         `;
+
+        document.getElementById("bilgi").innerHTML = bilgi;
 
         const uyari = document.getElementById("uyari");
 
-        if (data.fark.includes("dk")) {
+        if (data.fark !== "Önceki deprem bulunamadı") {
           const dakika = parseInt(data.fark);
           if (!isNaN(dakika) && dakika < 15) {
             uyari.style.display = "block";
-            uyari.innerText = "⚠️ Uyarı: Aynı bölgede kısa sürede birden fazla deprem algılandı!";
+            uyari.innerText = "⚠️ Uyarı: Aynı bölgede kısa süre içinde birden fazla deprem algılandı!";
             uyari.classList.remove("ok");
           } else {
             uyari.style.display = "block";
@@ -158,6 +162,7 @@
         }
 
         haritayiGuncelle(data.lat, data.lon, data.title, data.mag);
+
       } catch (err) {
         document.getElementById("bilgi").innerText = "Veri alınamadı.";
       }
@@ -166,7 +171,6 @@
     depremVerisi();
     setInterval(depremVerisi, 60000);
   </script>
-
 </body>
 
 </html>
