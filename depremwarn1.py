@@ -1,12 +1,11 @@
 from flask import Flask, render_template, jsonify
 import requests
-from datetime import datetime
 import re
+from datetime import datetime
 
 app = Flask(__name__)
 
 KANDILLI_URL = "http://www.koeri.boun.edu.tr/scripts/lst9.asp"
-
 
 def get_parantez_ici(title):
     match = re.search(r"\((.*?)\)", title)
@@ -14,43 +13,49 @@ def get_parantez_ici(title):
 
 
 def fetch_kandilli_data():
-    """Kandilli web sayfasından deprem listesini çeker ve JSON olarak döndürür."""
-    resp = requests.get(KANDILLI_URL)
-    resp.encoding = 'latin-1'
-    text = resp.text
+    """Kandilli web sayfasından en son depremleri çeker ve JSON döner."""
+    try:
+        resp = requests.get(KANDILLI_URL, timeout=10)
+        resp.encoding = resp.apparent_encoding  # otomatik tanıma
+        text = resp.text
 
-    lines = text.splitlines()
-    pattern = re.compile(
-        r"^\s*\d+\s+(\d{4}\.\d{2}\.\d{2})\s+(\d{2}:\d{2}:\d{2})\s+([-\d\.]+)\s+([-\d\.]+)\s+([-\d\.]+)\s+([-\d\.]+|[-–])\s+([-\d\.]+|[-–])\s+([-\d\.]+|[-–])\s+(.*)$"
-    )
+        # <pre> etiketi varsa sadece içeriğini al
+        pre_match = re.search(r"<pre>(.*?)</pre>", text, re.DOTALL | re.IGNORECASE)
+        if pre_match:
+            text = pre_match.group(1)
 
-    depremler = []
-    for line in lines:
-        m = pattern.match(line)
-        if not m:
-            continue
+        lines = text.splitlines()
 
-        tarih = m.group(1).strip()
-        saat = m.group(2).strip()
-        enlem = m.group(3).strip()
-        boylam = m.group(4).strip()
-        derinlik = m.group(5).strip()
-        md = m.group(6).strip()
-        ml = m.group(7).strip()
-        mw = m.group(8).strip()
-        yer = m.group(9).strip()
+        # Kandilli satır formatı genelde sabit genişlikte
+        pattern = re.compile(
+            r"^\s*\d+\s+(\d{4}\.\d{2}\.\d{2})\s+(\d{2}:\d{2}:\d{2})\s+([-\d\.]+)\s+([-\d\.]+)\s+([-\d\.]+)\s+([-\d\.]+|[-–])\s+([-\d\.]+|[-–])\s+([-\d\.]+|[-–])\s+(.*)$"
+        )
 
-        deprem = {
-            "title": yer,
-            "date": f"{tarih} {saat}",
-            "mag": ml if ml not in ["-", "–"] else None,
-            "depth": derinlik,
-            "lat": enlem,
-            "lon": boylam,
-        }
-        depremler.append(deprem)
+        earthquakes = []
+        for line in lines:
+            m = pattern.match(line)
+            if not m:
+                continue
 
-    return depremler
+            tarih, saat, lat, lon, derinlik, md, ml, mw, yer = [g.strip() for g in m.groups()]
+
+            earthquakes.append({
+                "title": yer,
+                "date": f"{tarih} {saat}",
+                "mag": ml if ml not in ["-", "–"] else None,
+                "depth": derinlik,
+                "lat": lat,
+                "lon": lon
+            })
+
+        if not earthquakes:
+            raise ValueError("Veri parse edilemedi (regex eşleşmedi).")
+
+        return earthquakes
+
+    except Exception as e:
+        print("Kandilli veri çekme hatası:", e)
+        return []
 
 
 @app.route("/")
@@ -63,20 +68,26 @@ def deprem_api():
     try:
         data = fetch_kandilli_data()
         if not data:
-            return jsonify({"error": "Deprem verisi alınamadı"})
+            return jsonify({"error": "Kandilli verisi alınamadı"})
 
-        current = data[0]  # en son deprem
+        current = data[0]
         bolge = get_parantez_ici(current["title"])
 
-        # Tarih formatı: YYYY.MM.DD HH:MM:SS
-        current_dt = datetime.strptime(current["date"], "%Y.%m.%d %H:%M:%S")
+        try:
+            current_dt = datetime.strptime(current["date"], "%Y.%m.%d %H:%M:%S")
+        except ValueError:
+            # tarih formatı değişmişse burada hata almamak için düzelt
+            current_dt = datetime.now()
 
         fark = "Önceki deprem bulunamadı"
         for d in data[1:]:
             if get_parantez_ici(d["title"]) == bolge:
-                dt = datetime.strptime(d["date"], "%Y.%m.%d %H:%M:%S")
-                dakika_fark = int((current_dt - dt).total_seconds() // 60)
-                fark = f"{dakika_fark} dk"
+                try:
+                    dt = datetime.strptime(d["date"], "%Y.%m.%d %H:%M:%S")
+                    dakika_fark = int((current_dt - dt).total_seconds() // 60)
+                    fark = f"{dakika_fark} dk"
+                except:
+                    fark = "Zaman farkı hesaplanamadı"
                 break
 
         return jsonify({
@@ -98,6 +109,8 @@ def deprem_api():
 def onceki():
     try:
         data = fetch_kandilli_data()
+        if not data:
+            return "Kandilli verisi alınamadı."
         return render_template("onceki.html", depremler=data)
     except Exception as e:
         return f"Hata: {e}"
