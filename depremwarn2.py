@@ -8,6 +8,7 @@ app = Flask(__name__)
 API_URL = "https://api.orhanaydogdu.com.tr/deprem/kandilli/live"
 
 def get_parantez_ici(title):
+    import re
     match = re.search(r"\((.*?)\)", title)
     return match.group(1) if match else None
 
@@ -18,91 +19,43 @@ def index():
 @app.route("/api/deprem")
 def deprem_api():
     try:
-        resp = requests.get(API_URL, timeout=10)
-        data = resp.json()
-        # API docs’a göre “live” endpoint doğrudan bir nesne dönebilir, ya da “result” listesi olabilir
-        # Örneğin: { "earthquake_id": ..., "title": ..., "date": ..., ... }
-        # veya: { "result": [ {...}, {...}, ... ] }
-        # Öyleyse önce yapıyı kontrol et:
+        data = requests.get(API_URL).json()["result"]
+        current = data[0]
+        bolge = get_parantez_ici(current["title"])
+        current_dt = datetime.strptime(current["date"], "%Y.%m.%d %H:%M:%S")
 
-        # Eğer "result" anahtarı varsa:
-        if isinstance(data, dict) and "result" in data:
-            results = data["result"]
-            if not results:
-                return jsonify({"error": "Sonuç listesi boş"})
-            current = results[0]
-        else:
-            # Doğrudan tek nesne gelmiş olabilir
-            current = data
-
-        # Gerekli alanların mevcut olup olmadığına bak:
-        title = current.get("title") or current.get("lokasyon") or ""
-        date_str = current.get("date") or current.get("date_time") or current.get("datetime")
-        mag = current.get("mag")
-        depth = current.get("depth")
-        geojson = current.get("geojson", {})
-        coords = geojson.get("coordinates", [None, None])
-        # coords: [lon, lat]
-        lon = coords[0]
-        lat = coords[1]
-
-        # Parse tarihi kontrol et
-        current_dt = None
         fark = "Önceki deprem bulunamadı"
-        if date_str:
-            # API docs örneğinde format "YYYY.MM.DD HH:MM:SS"
-            try:
-                current_dt = datetime.strptime(date_str, "%Y.%m.%d %H:%M:%S")
-            except Exception:
-                # Farklı formatta gelmiş olabilir, sadece atla
-                pass
-
-        # Eğer “result” listesi geldiyse ve diğer eleman varsa fark hesapla
-        if isinstance(data, dict) and "result" in data and len(data["result"]) > 1 and current_dt:
-            for d in data["result"][1:]:
-                # Aynı bölge kontrolü:
-                title2 = d.get("title") or d.get("lokasyon") or ""
-                if get_parantez_ici(title2) == get_parantez_ici(title):
-                    date2 = d.get("date") or d.get("date_time") or d.get("datetime")
-                    if date2:
-                        try:
-                            dt2 = datetime.strptime(date2, "%Y.%m.%d %H:%M:%S")
-                            dakika_fark = int((current_dt - dt2).total_seconds() // 60)
-                            fark = f"{dakika_fark} dk"
-                        except Exception:
-                            pass
-                    break
+        for d in data[1:]:
+            if get_parantez_ici(d["title"]) == bolge:
+                dt = datetime.strptime(d["date"], "%Y.%m.%d %H:%M:%S")
+                fark = f"{int((current_dt - dt).total_seconds() // 60)} dakika önce"
+                break
 
         return jsonify({
-            "title": title,
-            "mag": mag,
-            "depth": depth,
-            "date": date_str,
-            "lat": lat,
-            "lon": lon,
-            "bolge": get_parantez_ici(title),
+            "title": current["title"],
+            "mag": current["mag"],
+            "depth": current["depth"],
+            "date": current["date"],
+            "bolge": bolge,
             "fark": fark
         })
 
     except Exception as e:
         return jsonify({"error": str(e)})
 
-
+# —————— BURAYA /onceki ROUTE’U EKLİYORUZ ——————
 @app.route("/onceki")
 def onceki():
     try:
-        resp = requests.get(API_URL, timeout=10)
-        data = resp.json()
-
-        if isinstance(data, dict) and "result" in data:
-            results = data["result"]
-        else:
-            results = [data]
-
-        return render_template("onceki.html", depremler=results)
+        data = requests.get(API_URL).json()["result"]
+        return render_template("onceki.html", depremler=data)
     except Exception as e:
         return f"Hata: {e}"
 
-
 if __name__ == "__main__":
     app.run(debug=True)
+import os
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
