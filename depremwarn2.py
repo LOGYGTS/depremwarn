@@ -3,13 +3,14 @@ import requests
 from datetime import datetime
 import os
 import re
-from dateutil import parser  # Tarih formatını esnek parse etmek için
+from dateutil import parser  # Tarih parse için esnek çözüm
 
 app = Flask(__name__)
 
 API_URL = "https://api.orhanaydogdu.com.tr/deprem/kandilli/live"
 
 def get_parantez_ici(title):
+    """Title içindeki parantez içeriğini döndürür"""
     match = re.search(r"\((.*?)\)", title)
     return match.group(1) if match else None
 
@@ -20,14 +21,20 @@ def index():
 @app.route("/api/deprem")
 def deprem_api():
     try:
-        response = requests.get(API_URL, timeout=5)
+        headers = {"User-Agent": "Mozilla/5.0"}  # HTML yerine JSON gelme olasılığı için
+        response = requests.get(API_URL, headers=headers, timeout=5)
+        
+        # JSON kontrolü
+        if "application/json" not in response.headers.get("Content-Type", ""):
+            return jsonify({"error": "API geçersiz yanıt döndürdü (HTML veya başka format)"}), 500
+        
         data = response.json().get("result", [])
         if not data:
-            return jsonify({"error": "API boş veri döndürdü"})
+            return jsonify({"error": "API boş veri döndürdü"}), 404
 
         current = data[0]
         bolge = get_parantez_ici(current["title"])
-        current_dt = parser.parse(current["date"])  # dateutil ile esnek parse
+        current_dt = parser.parse(current["date"])  # Tarih parse
 
         fark = "Önceki deprem bulunamadı"
         for d in data[1:]:
@@ -47,15 +54,20 @@ def deprem_api():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/onceki")
 def onceki():
     try:
-        data = requests.get(API_URL, timeout=5).json().get("result", [])
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(API_URL, headers=headers, timeout=5)
+        if "application/json" not in response.headers.get("Content-Type", ""):
+            return "API geçersiz yanıt döndürdü (HTML veya başka format)", 500
+        
+        data = response.json().get("result", [])
         return render_template("onceki.html", depremler=data)
     except Exception as e:
-        return f"Hata: {e}"
+        return f"Hata: {e}", 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
