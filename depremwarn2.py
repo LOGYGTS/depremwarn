@@ -20,9 +20,11 @@ def index():
 def deprem_api():
     try:
         response = requests.get(API_URL, timeout=5)
-        data = response.json()["result"]
-        current = data[0]
+        data = response.json().get("result", [])
+        if not data:
+            return jsonify({"error": "API boş veri döndürdü"})
 
+        current = data[0]
         bolge = get_parantez_ici(current["title"])
         current_dt = datetime.strptime(current["date"], "%Y.%m.%d %H:%M:%S")
 
@@ -55,5 +57,6 @@ def onceki():
         return f"Hata: {e}"
 
 if __name__ == "__main__":
+    # Render, Railway veya Replit için PORT ortam değişkenini dinle
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, debug=False)
