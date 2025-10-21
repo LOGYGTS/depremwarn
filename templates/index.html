@@ -1,176 +1,60 @@
 <!DOCTYPE html>
 <html lang="tr">
-
 <head>
   <meta charset="UTF-8">
-  <title>🌍 Kandilli Deprem Takip</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <title>Deprem Bilgisi</title>
   <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      margin: 0;
-      padding: 0;
-      background: linear-gradient(to right, #2c3e50, #3498db);
-      color: #fff;
+    body { 
+      font-family: Arial, sans-serif; 
+      padding: 20px; 
+      background: #f6f6f6;
     }
-
-    .container {
-      max-width: 600px;
-      margin: 100px auto;
-      background: rgba(0, 0, 0, 0.4);
-      padding: 30px;
-      border-radius: 15px;
-      box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
-      position: relative;
+    h1 { text-align: center; color: #333; }
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      max-width: 400px;
+      margin: 30px auto;
     }
-
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-      color: #f1c40f;
-    }
-
-    .menu {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-
-    .menu a {
-      background-color: #f39c12;
-      color: white;
-      padding: 10px 20px;
-      border-radius: 8px;
-      text-decoration: none;
-      font-weight: bold;
-      margin: 0 5px;
-    }
-
-    .deprem-info {
-      line-height: 1.8;
-      font-size: 16px;
-    }
-
-    .uyari {
-      margin-top: 20px;
-      padding: 10px;
-      border-radius: 10px;
-      background-color: #e74c3c;
-      font-weight: bold;
-      display: none;
-    }
-
-    .ok {
-      background-color: #2ecc71;
-    }
-
-    #map {
-      height: 300px;
-      margin-top: 20px;
-      border-radius: 10px;
-    }
-
-    .harita-btn {
-      position: absolute;
-      top: -60px;
-      left: 10px;
-    }
-
-    .harita-btn a {
-      background-color: #f39c12;
-      color: white;
-      padding: 8px 14px;
-      border-radius: 10px;
-      text-decoration: none;
-      font-weight: bold;
-    }
+    p { margin: 8px 0; }
+    .error { color: red; text-align: center; }
   </style>
 </head>
-
 <body>
-  <div class="container">
-
-    <div class="harita-btn">
-      <a href="/haritalar">🗺️ Haritalar</a>
-    </div>
-
-    <h1>🌍 Kandilli Deprem Takip</h1>
-
-    <div class="menu">
-      <a href="/onceki">📜 Önceki Depremler</a>
-    </div>
-
-    <div id="bilgi" class="deprem-info">Yükleniyor...</div>
-    <div id="uyari" class="uyari"></div>
-    <div id="map"></div>
+  <h1>Son Deprem Bilgisi</h1>
+  <div id="deprem" class="card">
+    <p><strong>Bölge:</strong> <span id="bolge">Yükleniyor...</span></p>
+    <p><strong>Büyüklük:</strong> <span id="mag"></span></p>
+    <p><strong>Derinlik:</strong> <span id="depth"></span></p>
+    <p><strong>Tarih:</strong> <span id="date"></span></p>
+    <p><strong>Önceki Fark:</strong> <span id="fark"></span></p>
   </div>
 
   <script>
-    let map;
-
-    function haritayiGuncelle(lat, lon, yer, mag) {
-      if (!map) {
-        map = L.map('map').setView([lat, lon], 7);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap'
-        }).addTo(map);
-      } else {
-        map.setView([lat, lon], 7);
-      }
-
-      L.marker([lat, lon]).addTo(map)
-        .bindPopup(`<b>${yer}</b><br>💥 Büyüklük: ${mag}`)
-        .openPopup();
-    }
-
-    async function depremVerisi() {
+    async function yukle() {
       try {
         const res = await fetch("/api/deprem");
         const data = await res.json();
 
         if (data.error) {
-          document.getElementById("bilgi").innerText = "Hata: " + data.error;
+          document.getElementById("deprem").innerHTML = `<p class="error">Hata: ${data.error}</p>`;
           return;
         }
 
-        let bilgi = `
-          📍 Yer: ${data.title}<br>
-          📅 Tarih: ${data.date}<br>
-          💥 Büyüklük: ${data.mag} ML<br>
-          🌡️ Derinlik: ${data.depth} km<br>
-          🕒 Aynı bölgede önceki fark: ${data.fark}
-        `;
-
-        document.getElementById("bilgi").innerHTML = bilgi;
-
-        const uyari = document.getElementById("uyari");
-
-        if (data.fark !== "Önceki deprem bulunamadı") {
-          const dakika = parseInt(data.fark);
-          if (!isNaN(dakika) && dakika < 15) {
-            uyari.style.display = "block";
-            uyari.innerText = "⚠️ Uyarı: Aynı bölgede kısa süre içinde birden fazla deprem algılandı!";
-            uyari.classList.remove("ok");
-          } else {
-            uyari.style.display = "block";
-            uyari.innerText = "🟢 Her şey normal.";
-            uyari.classList.add("ok");
-          }
-        } else {
-          uyari.style.display = "none";
-        }
-
-        haritayiGuncelle(data.lat, data.lon, data.title, data.mag);
+        document.getElementById("bolge").innerText = data.bolge;
+        document.getElementById("mag").innerText = data.mag;
+        document.getElementById("depth").innerText = data.depth;
+        document.getElementById("date").innerText = data.date;
+        document.getElementById("fark").innerText = data.fark;
 
       } catch (err) {
-        document.getElementById("bilgi").innerText = "Veri alınamadı.";
+        document.getElementById("deprem").innerHTML = `<p class="error">Bağlantı hatası: ${err}</p>`;
       }
     }
 
-    depremVerisi();
-    setInterval(depremVerisi, 60000);
+    yukle();
   </script>
 </body>
-
 </html>
