@@ -3,6 +3,7 @@ import requests
 from datetime import datetime
 import os
 import re
+from dateutil import parser  # Tarih formatını esnek parse etmek için
 
 app = Flask(__name__)
 
@@ -26,12 +27,12 @@ def deprem_api():
 
         current = data[0]
         bolge = get_parantez_ici(current["title"])
-        current_dt = datetime.strptime(current["date"], "%Y.%m.%d %H:%M:%S")
+        current_dt = parser.parse(current["date"])  # dateutil ile esnek parse
 
         fark = "Önceki deprem bulunamadı"
         for d in data[1:]:
             if get_parantez_ici(d["title"]) == bolge:
-                dt = datetime.strptime(d["date"], "%Y.%m.%d %H:%M:%S")
+                dt = parser.parse(d["date"])
                 dakika = int((current_dt - dt).total_seconds() // 60)
                 fark = f"{dakika} dakika önce"
                 break
@@ -51,12 +52,11 @@ def deprem_api():
 @app.route("/onceki")
 def onceki():
     try:
-        data = requests.get(API_URL, timeout=5).json()["result"]
+        data = requests.get(API_URL, timeout=5).json().get("result", [])
         return render_template("onceki.html", depremler=data)
     except Exception as e:
         return f"Hata: {e}"
 
 if __name__ == "__main__":
-    # Render, Railway veya Replit için PORT ortam değişkenini dinle
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
