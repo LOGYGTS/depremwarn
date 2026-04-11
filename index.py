@@ -5,7 +5,7 @@ app = Flask(__name__)
 
 # --- AYARLAR (BURAYI KONTROL ET) ---
 # Token başında veya sonunda boşluk kalmadığından emin ol
-TELEGRAM_TOKEN = "8661340862:AAF2uR2fwN0aSHES65xB7uswA1ceuQcZhw8"
+TELEGRAM_TOKEN = "8661340862:AAF23SAF8bVEMx7lBXBdyEfqRelLMENIs3s"
 # Chat ID'nin başındaki eksi (-) işaretini unutma
 CHAT_ID = "-1005272137007" 
 
