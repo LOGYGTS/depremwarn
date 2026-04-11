@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 # --- AYARLAR ---
 TELEGRAM_TOKEN = "8661340862:AAF6rHBe2ZfSr1pYGqc52V4-Gup8yIwu60I"
-CHAT_ID = "-1003076665434"
+CHAT_ID = "~1003076665434"
 # Hafızada son depremi tutmak için (Tekrarları önler)
 LAST_NOTIFIED_ID = [None] 
 
@@ -106,7 +106,7 @@ def get_data():
             d_id = ilk_deprem["earthquake_id"]
             
             # Eğer yeni bir depremse ve 2.5 üzeriyse Telegram'a at
-            if mag >= 2.5 and d_id != LAST_NOTIFIED_ID[0]:
+            if mag >= 1.5 and d_id != LAST_NOTIFIED_ID[0]:
                 risk = sismik_risk_etiketi(mag, ilk_deprem["depth"])
                 saat = ham_saatler[0] if ham_saatler else "Bilinmiyor"
                 lat = ilk_deprem['geojson']['coordinates'][1]
