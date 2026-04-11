@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 # --- AYARLAR ---
 TELEGRAM_TOKEN = "8661340862:AAF6rHBe2ZfSr1pYGqc52V4-Gup8yIwu60I"
-CHAT_ID = "-1003273342330"
+CHAT_ID = "-1003076665434"
 # Hafızada son depremi tutmak için (Tekrarları önler)
 LAST_NOTIFIED_ID = [None] 
 
