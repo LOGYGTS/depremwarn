@@ -11,7 +11,7 @@ TELEGRAM_TOKEN = "8661340862:AAF6rHBe2ZfSr1pYGqc52V4-Gup8yIwu60I"
 CHAT_ID = "-1003076665434"
 LAST_NOTIFIED_ID = [None]
 
-# HTML Şablonun (Burada hiçbir değişiklik yapma)
+# Harita ve Panel Tasarımı
 HTML_SABLONU = """
 <!DOCTYPE html>
 <html lang="tr">
@@ -72,8 +72,8 @@ def telegram_gonder(mesaj):
     try:
         res = requests.post(url, data=payload, timeout=5)
         return res.json()
-    except:
-        return None
+    except Exception as e:
+        return {"ok": False, "description": str(e)}
 
 def sismik_risk_etiketi(mag, derinlik):
     mag = float(mag)
@@ -89,10 +89,11 @@ def sismik_risk_etiketi(mag, derinlik):
 def index():
     return render_template_string(HTML_SABLONU)
 
+# --- /test ADRESİ ---
 @app.route('/test')
 def test_mesaji():
     test_yerler = ["Marmara Denizi", "Ege Denizi", "Ankara", "İzmir", "İstanbul", "Antalya"]
-    test_mag = round(random.uniform(2.5, 5.5), 1)
+    test_mag = round(random.uniform(3.0, 5.0), 1)
     test_yer = random.choice(test_yerler)
     risk = sismik_risk_etiketi(test_mag, 7.0)
     
@@ -100,15 +101,14 @@ def test_mesaji():
         f"🚀 <b>SİSTEM TEST BİLDİRİMİ</b>\n\n"
         f"📍 <b>Yer:</b> {test_yer}\n"
         f"📊 <b>Büyüklük:</b> <b>{test_mag}</b>\n"
-        f"📉 <b>Derinlik:</b> 7.0 km\n"
         f"🚦 <b>Analiz:</b> {risk['status']}\n\n"
-        f"✅ Bot şu an başarıyla çalışıyor."
+        f"✅ Eğer bu mesajı görüyorsan botun çalışıyor!"
     )
     sonuc = telegram_gonder(mesaj)
-    if sonuc and sonuc.get("ok"):
-        return "Test mesajı başarıyla Telegram grubuna gönderildi!"
+    if sonuc.get("ok"):
+        return "✅ Test mesajı Telegram'a başarıyla gönderildi!"
     else:
-        return f"Hata! Mesaj gönderilemedi. Hata kodu: {sonuc}"
+        return f"❌ Hata! Telegram mesajı gönderemedi. Sebebi: {sonuc.get('description')}"
 
 @app.route('/get_data')
 def get_data():
@@ -154,3 +154,4 @@ def get_data():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
+
