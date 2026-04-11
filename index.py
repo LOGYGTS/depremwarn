@@ -3,12 +3,13 @@ import requests
 
 app = Flask(__name__)
 
-# --- GÜNCEL BİLGİLERİN ---
+# --- AYARLAR ---
 TELEGRAM_TOKEN = "8661340862:AAF2F7wpAvuFsH1xAtaYWBi-A0mG6ZiYPsY"
 CHAT_ID = "-1003826426476"
+# Son bildirilen depremi hafızada tutarak mükerrer mesajı önler
 LAST_NOTIFIED_ID = [None]
 
-# ANA SAYFA TASARIMI (Birebir Split Screen)
+# ANA SAYFA TASARIMI (Split Screen & Risk Algoritması)
 HTML_SABLONU = """
 <!DOCTYPE html>
 <html lang="tr">
@@ -40,7 +41,7 @@ HTML_SABLONU = """
     </header>
     <div class="main-container">
         <div id="map"></div>
-        <div class="sidebar" id="liste">Yükleniyor...</div>
+        <div class="sidebar" id="liste">Veriler yükleniyor...</div>
     </div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
@@ -70,7 +71,7 @@ HTML_SABLONU = """
                     </div>`;
                 });
                 document.getElementById('liste').innerHTML = html;
-            } catch(e) {}
+            } catch(e) { console.error("Hata:", e); }
         }
         updateData(); setInterval(updateData, 30000);
     </script>
@@ -79,14 +80,12 @@ HTML_SABLONU = """
 """
 
 def get_risk_info(mag):
-    """Büyüklüğe göre risk etiketi döndürür."""
     m = float(mag)
-    if m >= 4.0: return "🔴 RİSKLİ", "#ef4444"
-    if m >= 3.0: return "🟡 ORTA", "#f59e0b"
-    return "🟢 GÜVENLİ", "#10b981"
+    if m >= 4.0: return "🔴 RİSKLİ"
+    if m >= 3.0: return "🟡 ORTA"
+    return "🟢 GÜVENLİ"
 
 def tg_post(text):
-    """Telegram'a temiz formatta mesaj gönderir."""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     requests.post(url, data={"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}, timeout=5)
 
@@ -99,18 +98,16 @@ def webhook():
         upd = request.get_json()
         if "message" in upd and "text" in upd["message"]:
             msg_text = upd["message"]["text"].lower()
-            
-            # /deprem komutu - Ana site verileriyle aynı formatta
             if "/deprem" in msg_text:
                 r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
                 if r.get("result"):
                     son = r["result"][0]
-                    risk_label, _ = get_risk_info(son['mag'])
-                    text = (f"📡 <b>SON DEPREM BİLGİSİ</b>\n\n"
-                            f"📊 <b>Büyüklük:</b> {son['mag']} ({risk_label})\n"
-                            f"📍 <b>Yer:</b> {son['title']}\n"
+                    risk = get_risk_info(son['mag'])
+                    text = (f"📡 <b>SON DEPREM</b>\\n\\n"
+                            f"📊 <b>Büyüklük:</b> {son['mag']} ({risk})\\n"
+                            f"📍 <b>Yer:</b> {son['title']}\\n"
                             f"⏰ <b>Saat:</b> {son['date_time']}")
-                    tg_post(text)
+                    tg_post(text.replace("\\n", "\n"))
     except: pass
     return "OK", 200
 
@@ -120,14 +117,15 @@ def get_data():
         r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live", timeout=8).json()
         if r.get("result"):
             son = r["result"][0]
+            # SİSTEMİN KALBİ: Yeni bir deprem ID'si gelirse otomatik atar
             if son["earthquake_id"] != LAST_NOTIFIED_ID[0]:
                 if float(son["mag"]) >= 1.5:
-                    risk_label, _ = get_risk_info(son['mag'])
-                    msg = (f"🔔 <b>YENİ DEPREM</b>\n\n"
-                           f"📊 <b>Büyüklük:</b> {son['mag']} ({risk_label})\n"
-                           f"📍 <b>Yer:</b> {son['title']}\n"
+                    risk = get_risk_info(son['mag'])
+                    msg = (f"🔔 <b>OTOMATİK BİLDİRİM</b>\\n\\n"
+                           f"📊 <b>Büyüklük:</b> {son['mag']} ({risk})\\n"
+                           f"📍 <b>Yer:</b> {son['title']}\\n"
                            f"⏰ <b>Saat:</b> {son['date_time'].split(' ')[1]}")
-                    tg_post(msg)
+                    tg_post(msg.replace("\\n", "\n"))
                 LAST_NOTIFIED_ID[0] = son["earthquake_id"]
         return jsonify(r)
     except: return jsonify({"result": []})
