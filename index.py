@@ -3,13 +3,12 @@ import requests
 
 app = Flask(__name__)
 
-# --- AYARLAR ---
+# --- GÜNCEL BİLGİLERİN ---
 TELEGRAM_TOKEN = "8661340862:AAF2F7wpAvuFsH1xAtaYWBi-A0mG6ZiYPsY"
-CHAT_ID = "-1003826426476"
-# Son bildirilen depremi hafızada tutarak mükerrer mesajı önler
+CHAT_ID = "-1003273342330"
 LAST_NOTIFIED_ID = [None]
 
-# ANA SAYFA TASARIMI (Split Screen & Risk Algoritması)
+# ANA SAYFA TASARIMI
 HTML_SABLONU = """
 <!DOCTYPE html>
 <html lang="tr">
@@ -30,7 +29,7 @@ HTML_SABLONU = """
         .status-badge { position: absolute; top: 10px; right: 10px; font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
         .mag { font-size: 1.4rem; font-weight: bold; margin-bottom: 2px; }
         .loc { font-size: 0.85rem; font-weight: 600; text-transform: uppercase; color: #e2e8f0; margin-bottom: 3px; }
-        .time { font-size: 0.75rem; color: #94a3b8; }
+        .details { font-size: 0.75rem; color: #94a3b8; display: flex; justify-content: space-between; }
         @media (max-width: 768px) { .main-container { flex-direction: column; } #map { flex: none; height: 40%; } .sidebar { flex: 1; } }
     </style>
 </head>
@@ -67,11 +66,14 @@ HTML_SABLONU = """
                         <div class="status-badge" style="color:${color}; border: 1px solid ${color}">${label}</div>
                         <div class="mag" style="color:${color}">${q.mag}</div>
                         <div class="loc">${q.title}</div>
-                        <div class="time">Saat: ${q.date_time.split(' ')[1]}</div>
+                        <div class="details">
+                            <span>🕒 ${q.date_time.split(' ')[1]}</span>
+                            <span>📏 Derinlik: ${q.depth} km</span>
+                        </div>
                     </div>`;
                 });
                 document.getElementById('liste').innerHTML = html;
-            } catch(e) { console.error("Hata:", e); }
+            } catch(e) {}
         }
         updateData(); setInterval(updateData, 30000);
     </script>
@@ -103,11 +105,12 @@ def webhook():
                 if r.get("result"):
                     son = r["result"][0]
                     risk = get_risk_info(son['mag'])
-                    text = (f"📡 <b>SON DEPREM</b>\\n\\n"
-                            f"📊 <b>Büyüklük:</b> {son['mag']} ({risk})\\n"
-                            f"📍 <b>Yer:</b> {son['title']}\\n"
+                    text = (f"📢 <b>SON DEPREM</b>\n\n"
+                            f"📊 <b>Büyüklük:</b> {son['mag']} ({risk})\n"
+                            f"📍 <b>Yer:</b> {son['title']}\n"
+                            f"📏 <b>Derinlik:</b> {son['depth']} km\n"
                             f"⏰ <b>Saat:</b> {son['date_time']}")
-                    tg_post(text.replace("\\n", "\n"))
+                    tg_post(text)
     except: pass
     return "OK", 200
 
@@ -117,15 +120,15 @@ def get_data():
         r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live", timeout=8).json()
         if r.get("result"):
             son = r["result"][0]
-            # SİSTEMİN KALBİ: Yeni bir deprem ID'si gelirse otomatik atar
             if son["earthquake_id"] != LAST_NOTIFIED_ID[0]:
                 if float(son["mag"]) >= 1.5:
                     risk = get_risk_info(son['mag'])
-                    msg = (f"🔔 <b>OTOMATİK BİLDİRİM</b>\\n\\n"
-                           f"📊 <b>Büyüklük:</b> {son['mag']} ({risk})\\n"
-                           f"📍 <b>Yer:</b> {son['title']}\\n"
+                    msg = (f"🔔 <b>YENİ DEPREM</b>\n\n"
+                           f"📊 <b>Büyüklük:</b> {son['mag']} ({risk})\n"
+                           f"📍 <b>Yer:</b> {son['title']}\n"
+                           f"📏 <b>Derinlik:</b> {son['depth']} km\n"
                            f"⏰ <b>Saat:</b> {son['date_time'].split(' ')[1]}")
-                    tg_post(msg.replace("\\n", "\n"))
+                    tg_post(msg)
                 LAST_NOTIFIED_ID[0] = son["earthquake_id"]
         return jsonify(r)
     except: return jsonify({"result": []})
