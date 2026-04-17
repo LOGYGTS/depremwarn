@@ -1,16 +1,16 @@
 from flask import Flask, jsonify, render_template_string, request
 import requests
-import datetime
 
 app = Flask(__name__)
 
 # --- AYARLAR ---
 TELEGRAM_TOKEN = "8661340862:AAF2F7wpAvuFsH1xAtaYWBi-A0mG6ZiYPsY"
 CHAT_ID = "-1003273342330"
+COLLECT_API_KEY = "apikey 5GIip3rMo8hha15ETPnLnt:4TkrPv1j9K1AzvUl0pYLUK" # Görüntüdeki key
 LAST_NOTIFIED_ID = [None]
 TRACKED_MATCHES = {}
 
-# --- WEB PANEL (Algoritma ve Risk Analizi Geri Geldi) ---
+# --- WEB PANEL (Algoritma ve Risk Analizi) ---
 HTML_SABLONU = """
 <!DOCTYPE html>
 <html lang="tr">
@@ -26,7 +26,7 @@ HTML_SABLONU = """
         #map { flex: 2; height: 100%; border-right: 1px solid #334155; }
         .sidebar { flex: 0.8; background: #111827; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
         .quake-card { background: #1f2937; padding: 12px 15px; border-radius: 8px; border-left: 5px solid #10b981; cursor: pointer; position: relative; }
-        .status-badge { position: absolute; top: 10px; right: 10px; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase; }
+        .status-badge { position: absolute; top: 10px; right: 10px; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
         .mag { font-size: 1.4rem; font-weight: bold; }
         .loc { font-size: 0.85rem; font-weight: 600; color: #e2e8f0; margin: 3px 0; }
         .details { font-size: 0.75rem; color: #94a3b8; display: flex; justify-content: space-between; }
@@ -72,6 +72,7 @@ HTML_SABLONU = """
 </html>
 """
 
+# --- YARDIMCI FONKSİYONLAR ---
 def tg_post(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     requests.post(url, data={"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}, timeout=5)
@@ -82,23 +83,22 @@ def get_risk_info(mag):
     if m >= 3.0: return "🟡 ORTA"
     return "🟢 GÜVENLİ"
 
-# --- CANLI MAÇ VERİSİ (MAÇKOLİK/SOFASCORE TARZI ÜCRETSİZ) ---
-def get_real_match(takim_adi):
+# --- COLLECT API MAÇ VERİSİ ---
+def get_collect_score(takim_adi):
+    headers = {
+        'content-type': "application/json",
+        'authorization': COLLECT_API_KEY
+    }
     try:
-        # Ücretsiz bir skor API'si veya web servisinden veri çekme simülasyonu
-        # Not: Burası bugün oynanan gerçek Rizespor - Fenerbahçe maçını arar
-        # Örnek JSON yapısı:
-        return {
-            "home": "Çaykur Rizespor",
-            "away": "Fenerbahçe",
-            "time": "20:00",
-            "stadyum": "Çaykur Didi Stadyumu",
-            "hakem": "Arda Kardeşler",
-            "score": "0 - 0",
-            "minute": "1'",
-            "kadro": "Liva, Osayi, Djiku, Çağlar, Ferdi, İsmail, Fred, Tadic, Szymanski, Saint-Maximin, Dzeko"
-        }
+        # Süper Lig canlı sonuçlarını çekiyoruz
+        url = "https://api.collectapi.com/football/results?league=super-lig"
+        res = requests.get(url, headers=headers, timeout=8).json()
+        if res.get("success"):
+            for match in res["result"]:
+                if takim_adi.lower() in match['home'].lower() or takim_adi.lower() in match['away'].lower():
+                    return match
     except: return None
+    return None
 
 @app.route('/')
 def index(): return render_template_string(HTML_SABLONU)
@@ -110,6 +110,7 @@ def webhook():
         if "message" in upd and "text" in upd["message"]:
             msg = upd["message"]["text"].lower()
             
+            # --- DEPREM KOMUTLARI ---
             if "/deprem" in msg:
                 r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
                 s = r["result"][0]
@@ -117,27 +118,24 @@ def webhook():
 
             elif "/liste" in msg:
                 r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
-                text = "📋 <b>SON 10 DEPREM</b>\n───────────────────\n"
+                text = "📋 <b>SON 10 DEPREM (GÜNCEL)</b>\n───────────────────\n"
                 for q in r["result"][:10]:
                     text += f"▪️ <b>{q['mag']}</b> | {q['title']}\n    └ {get_risk_info(q['mag'])} | 🕒 {q['date_time'].split(' ')[1]} | 📏 {q['depth']} km\n\n"
                 tg_post(text)
 
+            # --- MAÇ KOMUTLARI ---
             elif msg.startswith("/ac"):
                 takim = msg.replace("/ac", "").strip()
-                match = get_real_match(takim)
+                match = get_collect_score(takim)
                 if match:
-                    TRACKED_MATCHES[takim] = {"last_score": match['score'], "is_notified": True}
-                    text = (f"🏟️ <b>MAÇ DETAYLARI: {match['home']} vs {match['away']}</b>\n"
+                    TRACKED_MATCHES[takim] = {"last_score": match['skor'], "is_notified": True}
+                    text = (f"🏟️ <b>MAÇ DETAYI: {match['home']} vs {match['away']}</b>\n"
                             f"───────────────────\n"
-                            f"🕒 <b>Maç Saati:</b> {match['time']}\n"
-                            f"📍 <b>Stadyum:</b> {match['stadyum']}\n"
-                            f"⚖️ <b>Hakem:</b> {match['hakem']}\n"
-                            f"📋 <b>Kadro:</b> {match['kadro']}\n"
-                            f"───────────────────\n"
-                            f"✅ Takibe alındı, goller anlık iletilecek.")
+                            f"🥅 <b>Anlık Skor:</b> {match['skor']}\n"
+                            f"✅ Takibe alındı. CollectAPI üzerinden goller anlık iletilecek.")
                     tg_post(text)
                 else:
-                    tg_post(f"❌ {takim.upper()} için bugün maç bulunamadı.")
+                    tg_post(f"❌ {takim.upper()} için Süper Lig'de bugün maç bulunamadı.")
     except: pass
     return "OK", 200
 
@@ -145,7 +143,7 @@ def webhook():
 def get_data():
     r_data = {"result": []}
     try:
-        # Deprem Kontrol
+        # 1. Deprem Kontrolü
         r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live", timeout=8).json()
         if r.get("result"):
             r_data = r
@@ -155,12 +153,12 @@ def get_data():
                     tg_post(f"🔔 <b>YENİ DEPREM</b>\n\n📊 {son['mag']} ({get_risk_info(son['mag'])})\n📍 {son['title']}\n📏 {son['depth']} km")
                 LAST_NOTIFIED_ID[0] = son["earthquake_id"]
 
-        # Maç Kontrol (Sadece skor değişince atar)
+        # 2. Maç Kontrolü (CollectAPI)
         for t in list(TRACKED_MATCHES.keys()):
-            m = get_real_match(t)
-            if m and m['score'] != TRACKED_MATCHES[t]['last_score']:
-                tg_post(f"⚽ <b>GOOOOOOOLLLL!</b>\n───────────────────\n🥅 <b>Skor:</b> {m['score']}\n🕒 <b>Dakika:</b> {m['minute']}")
-                TRACKED_MATCHES[t]['last_score'] = m['score']
+            m = get_collect_score(t)
+            if m and m['skor'] != TRACKED_MATCHES[t]['last_score']:
+                tg_post(f"⚽ <b>GOOOOOOOLLLL!</b>\n───────────────────\n🏟️ {m['home']} {m['skor']} {m['away']}\n🥅 Skor güncellendi.")
+                TRACKED_MATCHES[t]['last_score'] = m['skor']
     except: pass
     return jsonify(r_data)
 
