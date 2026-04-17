@@ -100,6 +100,8 @@ def webhook():
         upd = request.get_json()
         if "message" in upd and "text" in upd["message"]:
             msg_text = upd["message"]["text"].lower()
+            
+            # --- /deprem komutu (Son Tekli Deprem) ---
             if "/deprem" in msg_text:
                 r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
                 if r.get("result"):
@@ -111,6 +113,19 @@ def webhook():
                             f"📏 <b>Derinlik:</b> {son['depth']} km\n"
                             f"⏰ <b>Saat:</b> {son['date_time']}")
                     tg_post(text)
+            
+            # --- /liste komutu (Son 10 Deprem) ---
+            elif "/liste" in msg_text:
+                r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
+                if r.get("result"):
+                    son_on = r["result"][:10]
+                    text = "📋 <b>SON 10 DEPREM LİSTESİ</b>\n\n"
+                    for q in son_on:
+                        risk = get_risk_info(q['mag'])
+                        text += f"<b>{q['mag']}</b> - {q['title']} ({risk})\n"
+                    text += "\n🔍 Detaylar için panele göz atın."
+                    tg_post(text)
+                    
     except: pass
     return "OK", 200
 
