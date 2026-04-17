@@ -8,7 +8,7 @@ TELEGRAM_TOKEN = "8661340862:AAF2F7wpAvuFsH1xAtaYWBi-A0mG6ZiYPsY"
 CHAT_ID = "-1003273342330"
 LAST_NOTIFIED_ID = [None]
 
-# ANA SAYFA TASARIMI
+# ANA SAYFA TASARIMI (Aynen Korundu)
 HTML_SABLONU = """
 <!DOCTYPE html>
 <html lang="tr">
@@ -101,29 +101,33 @@ def webhook():
         if "message" in upd and "text" in upd["message"]:
             msg_text = upd["message"]["text"].lower()
             
-            # --- /deprem komutu (Son Tekli Deprem) ---
+            # --- /deprem komutu ---
             if "/deprem" in msg_text:
                 r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
                 if r.get("result"):
                     son = r["result"][0]
                     risk = get_risk_info(son['mag'])
-                    text = (f"📢 <b>SON DEPREM</b>\n\n"
+                    text = (f"📢 <b>SON DEPREM BİLGİSİ</b>\n\n"
                             f"📊 <b>Büyüklük:</b> {son['mag']} ({risk})\n"
                             f"📍 <b>Yer:</b> {son['title']}\n"
                             f"📏 <b>Derinlik:</b> {son['depth']} km\n"
                             f"⏰ <b>Saat:</b> {son['date_time']}")
                     tg_post(text)
             
-            # --- /liste komutu (Son 10 Deprem) ---
+            # --- /liste komutu (Gelişmiş Görünüm) ---
             elif "/liste" in msg_text:
                 r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
                 if r.get("result"):
                     son_on = r["result"][:10]
-                    text = "📋 <b>SON 10 DEPREM LİSTESİ</b>\n\n"
+                    text = "📋 <b>SON 10 DEPREM (GÜNCEL)</b>\n"
+                    text += "───────────────────\n"
                     for q in son_on:
                         risk = get_risk_info(q['mag'])
-                        text += f"<b>{q['mag']}</b> - {q['title']} ({risk})\n"
-                    text += "\n🔍 Detaylar için panele göz atın."
+                        # Her satırı emoji ve detayla süsledik
+                        text += f"▪️ <b>{q['mag']}</b> | {q['title']}\n"
+                        text += f"   └ {risk} | 🕒 {q['date_time'].split(' ')[1]}\n\n"
+                    text += "───────────────────\n"
+                    text += "🌐 <i>Detaylar sismik panelde günceldir.</i>"
                     tg_post(text)
                     
     except: pass
