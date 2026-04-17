@@ -10,7 +10,7 @@ FOOTBALL_API_KEY = "BURAYA_RAPIDAPI_KEY_GELECEK" # RapidAPI API-Football Key
 LAST_NOTIFIED_ID = [None]
 TRACKED_MATCHES = {} 
 
-# ANA SAYFA TASARIMI (Aynen Korundu)
+# HTML TASARIMI (Aynen Korundu)
 HTML_SABLONU = """
 <!DOCTYPE html>
 <html lang="tr">
@@ -113,20 +113,48 @@ def webhook():
                 text += "───────────────────"
                 tg_post(text)
 
-            # --- GOL BİLDİRİM KOMUTLARI ---
+            # --- GOL VE MAÇ TAKİP KOMUTU ---
             elif msg.startswith("/ac"):
                 takim = msg.replace("/ac", "").strip()
                 if takim:
-                    TRACKED_MATCHES[takim] = {"last_goal_count": -1}
-                    tg_post(f"⚽ <b>{takim.upper()}</b> maçı takibe alındı. Gol olduğunda tüm detaylar burada olacak!")
-                else:
-                    tg_post("❌ Kullanım: <code>/ac takım_adı</code>")
+                    headers = {'x-rapidapi-key': FOOTBALL_API_KEY, 'x-rapidapi-host': "v3.football.api-sports.io"}
+                    url = f"https://v3.football.api-sports.io/fixtures?live=all&search={takim}"
+                    # Canlı maç yoksa bugünkü maçlara bak
+                    res = requests.get(url, headers=headers).json()
+                    if not res.get("response"):
+                         url = f"https://v3.football.api-sports.io/fixtures?date=2026-04-17&search={takim}" # Güncel tarih otomatiğe bağlanabilir
+                         res = requests.get(url, headers=headers).json()
 
-            elif msg.startswith("/kapat"):
-                takim = msg.replace("/kapat", "").strip()
-                if takim in TRACKED_MATCHES:
-                    del TRACKED_MATCHES[takim]
-                    tg_post(f"📴 <b>{takim.upper()}</b> takibi durduruldu.")
+                    if res.get("response"):
+                        m = res["response"][0]
+                        stadyum = m['fixture']['venue']['name']
+                        hakem = m['fixture']['referee'] if m['fixture']['referee'] else "Belli değil"
+                        saat = m['fixture']['date'].split('T')[1][:5]
+                        
+                        text = (f"🏟️ <b>MAÇ ANALİZİ: {m['teams']['home']['name']} vs {m['teams']['away']['name']}</b>\n"
+                                f"───────────────────\n"
+                                f"🕒 <b>Başlangıç:</b> {saat}\n"
+                                f"📍 <b>Stadyum:</b> {stadyum}\n"
+                                f"⚖️ <b>Hakem:</b> {hakem}\n")
+
+                        # 11'ler Kontrolü
+                        lineup_url = f"https://v3.football.api-sports.io/fixtures/lineups?fixture={m['fixture']['id']}"
+                        l_res = requests.get(lineup_url, headers=headers).json()
+                        if l_res.get("response"):
+                            text += "\n📋 <b>İLK 11'LER BELLİ OLDU!</b>\n"
+                            for side in l_res["response"]:
+                                team_name = side['team']['name']
+                                players = ", ".join([p['player']['name'] for p in side['startXI']])
+                                text += f"\n👉 <b>{team_name}:</b> {players}\n"
+                        else:
+                            text += "\n⏳ <i>İlk 11'ler henüz açıklanmadı.</i>"
+
+                        TRACKED_MATCHES[takim] = {"last_goal_count": m['goals']['home'] + m['goals']['away']}
+                        tg_post(text)
+                    else:
+                        tg_post(f"❌ <b>{takim.upper()}</b> için bugün oynanan canlı maç bulunamadı.")
+                else:
+                    tg_post("❌ Kullanım: <code>/ac galatasaray</code>")
 
     except: pass
     return "OK", 200
@@ -141,25 +169,17 @@ def check_goals():
                 m = res["response"][0]
                 total_goals = m['goals']['home'] + m['goals']['away']
                 
-                # İlk kez açıldığında skoru kaydet ama bildirim atma
-                if TRACKED_MATCHES[takim]["last_goal_count"] == -1:
-                    TRACKED_MATCHES[takim]["last_goal_count"] = total_goals
-                    continue
-
                 if total_goals > TRACKED_MATCHES[takim]["last_goal_count"]:
-                    # En son gol olayını bul
                     events = m.get('events', [])
                     goal_ev = [e for e in events if e['type'] == 'Goal'][-1]
                     
                     player = goal_ev['player']['name']
                     assist = goal_ev['assist']['name'] if goal_ev['assist']['name'] else "Yok"
                     minute = goal_ev['time']['elapsed']
-                    score = f"{m['goals']['home']} - {m['goals']['away']}"
                     
                     text = (f"⚽ <b>GOOOOOOOOLLLL!</b>\n"
                             f"───────────────────\n"
-                            f"🏟️ <b>Maç:</b> {m['teams']['home']['name']} vs {m['teams']['away']['name']}\n"
-                            f"🥅 <b>Skor:</b> {score}\n"
+                            f"🥅 <b>Skor:</b> {m['goals']['home']} - {m['goals']['away']}\n"
                             f"👤 <b>Gol:</b> {player}\n"
                             f"🎯 <b>Asist:</b> {assist}\n"
                             f"🕒 <b>Dakika:</b> {minute}'\n"
@@ -170,7 +190,6 @@ def check_goals():
 
 @app.route('/get_data')
 def get_data():
-    # 1. Deprem Kontrol
     r_data = {"result": []}
     try:
         r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live", timeout=8).json()
@@ -184,7 +203,6 @@ def get_data():
                 LAST_NOTIFIED_ID[0] = son["earthquake_id"]
     except: pass
     
-    # 2. Maç Kontrol
     if TRACKED_MATCHES:
         check_goals()
 
