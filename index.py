@@ -6,11 +6,11 @@ app = Flask(__name__)
 # --- AYARLAR ---
 TELEGRAM_TOKEN = "8661340862:AAF2F7wpAvuFsH1xAtaYWBi-A0mG6ZiYPsY"
 CHAT_ID = "-1003273342330"
-COLLECT_API_KEY = "apikey 5GIip3rMo8hha15ETPnLnt:4TkrPv1j9K1AzvUl0pYLUK" # Görüntüdeki key
+COLLECT_API_KEY = "apikey 5GIip3rMo8hha15ETPnLnt:4TkrPv1j9K1AzvUl0pYLUK"
 LAST_NOTIFIED_ID = [None]
 TRACKED_MATCHES = {}
 
-# --- WEB PANEL (Algoritma ve Risk Analizi) ---
+# --- WEB PANEL (Renkler ve Risk Durumları Geri Geldi) ---
 HTML_SABLONU = """
 <!DOCTYPE html>
 <html lang="tr">
@@ -26,9 +26,9 @@ HTML_SABLONU = """
         #map { flex: 2; height: 100%; border-right: 1px solid #334155; }
         .sidebar { flex: 0.8; background: #111827; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
         .quake-card { background: #1f2937; padding: 12px 15px; border-radius: 8px; border-left: 5px solid #10b981; cursor: pointer; position: relative; }
-        .status-badge { position: absolute; top: 10px; right: 10px; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        .status-badge { position: absolute; top: 10px; right: 10px; font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; border: 1px solid; }
         .mag { font-size: 1.4rem; font-weight: bold; }
-        .loc { font-size: 0.85rem; font-weight: 600; color: #e2e8f0; margin: 3px 0; }
+        .loc { font-size: 0.85rem; font-weight: 600; color: #e2e8f0; margin: 3px 0; text-transform: uppercase; }
         .details { font-size: 0.75rem; color: #94a3b8; display: flex; justify-content: space-between; }
     </style>
 </head>
@@ -57,10 +57,10 @@ HTML_SABLONU = """
                     else if(mag >= 3.0) { color = "#f59e0b"; label = "ORTA"; }
                     
                     html += `<div class="quake-card" style="border-left-color: ${color}" onclick="map.setView([${q.geojson.coordinates[1]},${q.geojson.coordinates[0]}],8);">
-                        <div class="status-badge" style="color:${color}; border: 1px solid ${color}">${label}</div>
+                        <div class="status-badge" style="color:${color}; border-color:${color}">${label}</div>
                         <div class="mag" style="color:${color}">${q.mag}</div>
                         <div class="loc">${q.title}</div>
-                        <div class="details"><span>🕒 ${q.date_time.split(' ')[1]}</span><span>📏 ${q.depth} km</span></div>
+                        <div class="details"><span>🕒 ${q.date_time.split(' ')[1]}</span><span>📏 Derinlik: ${q.depth} km</span></div>
                     </div>`;
                 });
                 document.getElementById('liste').innerHTML = html;
@@ -72,7 +72,6 @@ HTML_SABLONU = """
 </html>
 """
 
-# --- YARDIMCI FONKSİYONLAR ---
 def tg_post(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     requests.post(url, data={"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}, timeout=5)
@@ -83,19 +82,16 @@ def get_risk_info(mag):
     if m >= 3.0: return "🟡 ORTA"
     return "🟢 GÜVENLİ"
 
-# --- COLLECT API MAÇ VERİSİ ---
-def get_collect_score(takim_adi):
-    headers = {
-        'content-type': "application/json",
-        'authorization': COLLECT_API_KEY
-    }
+# --- COLLECT API: AKILLI ARAMA ---
+def get_collect_match(search_term):
+    headers = {'content-type': "application/json", 'authorization': COLLECT_API_KEY}
     try:
-        # Süper Lig canlı sonuçlarını çekiyoruz
         url = "https://api.collectapi.com/football/results?league=super-lig"
         res = requests.get(url, headers=headers, timeout=8).json()
         if res.get("success"):
             for match in res["result"]:
-                if takim_adi.lower() in match['home'].lower() or takim_adi.lower() in match['away'].lower():
+                # Takım isimlerinde aranan kelime var mı? (fener, rize vb.)
+                if search_term.lower() in match['home'].lower() or search_term.lower() in match['away'].lower():
                     return match
     except: return None
     return None
@@ -114,7 +110,7 @@ def webhook():
             if "/deprem" in msg:
                 r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
                 s = r["result"][0]
-                tg_post(f"📢 <b>SON DEPREM</b>\n\n📊 {s['mag']} ({get_risk_info(s['mag'])})\n📍 {s['title']}\n📏 {s['depth']} km\n⏰ {s['date_time']}")
+                tg_post(f"📢 <b>SON DEPREM</b>\n\n📊 <b>Büyüklük:</b> {s['mag']} ({get_risk_info(s['mag'])})\n📍 <b>Yer:</b> {s['title']}\n📏 <b>Derinlik:</b> {s['depth']} km\n⏰ <b>Saat:</b> {s['date_time']}")
 
             elif "/liste" in msg:
                 r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
@@ -125,17 +121,18 @@ def webhook():
 
             # --- MAÇ KOMUTLARI ---
             elif msg.startswith("/ac"):
-                takim = msg.replace("/ac", "").strip()
-                match = get_collect_score(takim)
+                term = msg.replace("/ac", "").strip()
+                match = get_collect_match(term)
                 if match:
-                    TRACKED_MATCHES[takim] = {"last_score": match['skor'], "is_notified": True}
+                    TRACKED_MATCHES[term] = {"last_score": match['skor'], "notified": True}
                     text = (f"🏟️ <b>MAÇ DETAYI: {match['home']} vs {match['away']}</b>\n"
                             f"───────────────────\n"
                             f"🥅 <b>Anlık Skor:</b> {match['skor']}\n"
-                            f"✅ Takibe alındı. CollectAPI üzerinden goller anlık iletilecek.")
+                            f"🕒 <b>Maç Durumu:</b> Oynanıyor/Bitti\n"
+                            f"✅ CollectAPI ile takibe alındı.")
                     tg_post(text)
                 else:
-                    tg_post(f"❌ {takim.upper()} için Süper Lig'de bugün maç bulunamadı.")
+                    tg_post(f"❌ <b>{term.upper()}</b> için Süper Lig'de bugün maç bulunamadı veya isim eşleşmedi.")
     except: pass
     return "OK", 200
 
@@ -150,12 +147,12 @@ def get_data():
             son = r["result"][0]
             if son["earthquake_id"] != LAST_NOTIFIED_ID[0]:
                 if float(son["mag"]) >= 1.5:
-                    tg_post(f"🔔 <b>YENİ DEPREM</b>\n\n📊 {son['mag']} ({get_risk_info(son['mag'])})\n📍 {son['title']}\n📏 {son['depth']} km")
+                    tg_post(f"🔔 <b>YENİ DEPREM</b>\n\n📊 {son['mag']} ({get_risk_info(son['mag'])})\n📍 {son['title']}\n📏 <b>Derinlik:</b> {son['depth']} km")
                 LAST_NOTIFIED_ID[0] = son["earthquake_id"]
 
-        # 2. Maç Kontrolü (CollectAPI)
+        # 2. Maç Kontrolü
         for t in list(TRACKED_MATCHES.keys()):
-            m = get_collect_score(t)
+            m = get_collect_match(t)
             if m and m['skor'] != TRACKED_MATCHES[t]['last_score']:
                 tg_post(f"⚽ <b>GOOOOOOOLLLL!</b>\n───────────────────\n🏟️ {m['home']} {m['skor']} {m['away']}\n🥅 Skor güncellendi.")
                 TRACKED_MATCHES[t]['last_score'] = m['skor']
