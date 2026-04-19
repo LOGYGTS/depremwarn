@@ -114,7 +114,7 @@ def webhook():
 
             elif "/liste" in msg:
                 r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
-                text = "📋 <b>SON 10 DEPREM (GÜNCEL)</b>\n───────────────────\n"
+                text = "📋 <b>SON 10 DEPREM 🫨(GÜNCEL)</b>\n───────────────────\n"
                 for q in r["result"][:10]:
                     text += f"▪️ <b>{q['mag']}</b> | {q['title']}\n    └ {get_risk_info(q['mag'])} | 🕒 {q['date_time'].split(' ')[1]} | 📏 {q['depth']} km\n\n"
                 tg_post(text)
