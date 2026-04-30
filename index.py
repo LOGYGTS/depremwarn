@@ -4,13 +4,15 @@ import requests
 app = Flask(__name__)
 
 # --- AYARLAR ---
+# GÜVENLİK NOTU: Bu tokenı BotFather'dan yenilemeni şiddetle öneririm!
 TELEGRAM_TOKEN = "8661340862:AAFAsuLeneLik60CI9DEVwpdQ8KjWI_OBDc"
 CHAT_ID = "-1003273342330"
 COLLECT_API_KEY = "apikey 5GIip3rMo8hha15ETPnLnt:4TkrPv1j9K1AzvUl0pYLUK"
+
+# Bellekte tutulan veriler (Vercel'de uygulama uyuduğunda bunlar sıfırlanabilir)
 LAST_NOTIFIED_ID = [None]
 TRACKED_MATCHES = {}
 
-# --- WEB PANEL (Renkler ve Risk Durumları Geri Geldi) ---
 HTML_SABLONU = """
 <!DOCTYPE html>
 <html lang="tr">
@@ -43,7 +45,6 @@ HTML_SABLONU = """
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('tr-TR'); }, 1000);
         let map = L.map('map', {zoomControl: false}).setView([39.0, 35.2], 5);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        let marker = L.marker([39.0, 35.0]).addTo(map);
 
         async function updateData() {
             try {
@@ -72,9 +73,14 @@ HTML_SABLONU = """
 </html>
 """
 
-def tg_post(text):
+def tg_post(text, target_id=None):
+    if target_id is None: target_id = CHAT_ID
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}, timeout=5)
+    payload = {"chat_id": target_id, "text": text, "parse_mode": "HTML"}
+    try:
+        requests.post(url, data=payload, timeout=5)
+    except:
+        pass
 
 def get_risk_info(mag):
     m = float(mag)
@@ -82,7 +88,6 @@ def get_risk_info(mag):
     if m >= 3.0: return "🟡 ORTA"
     return "🟢 GÜVENLİ"
 
-# --- COLLECT API: AKILLI ARAMA ---
 def get_collect_match(search_term):
     headers = {'content-type': "application/json", 'authorization': COLLECT_API_KEY}
     try:
@@ -90,73 +95,73 @@ def get_collect_match(search_term):
         res = requests.get(url, headers=headers, timeout=8).json()
         if res.get("success"):
             for match in res["result"]:
-                # Takım isimlerinde aranan kelime var mı? (fener, rize vb.)
                 if search_term.lower() in match['home'].lower() or search_term.lower() in match['away'].lower():
                     return match
     except: return None
     return None
 
 @app.route('/')
-def index(): return render_template_string(HTML_SABLONU)
+def index():
+    return render_template_string(HTML_SABLONU)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
         upd = request.get_json()
-        if "message" in upd and "text" in upd["message"]:
-            msg = upd["message"]["text"].lower()
+        if not upd or "message" not in upd:
+            return "OK", 200
             
-            # --- DEPREM KOMUTLARI ---
-            if "/deprem" in msg:
-                r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
-                s = r["result"][0]
-                tg_post(f"📢 <b>SON DEPREM</b>\n\n📊 <b>Büyüklük:</b> {s['mag']} ({get_risk_info(s['mag'])})\n📍 <b>Yer:</b> {s['title']}\n📏 <b>Derinlik:</b> {s['depth']} km\n⏰ <b>Saat:</b> {s['date_time']}")
+        msg = upd["message"].get("text", "").lower()
+        sender_id = upd["message"]["chat"]["id"]
 
-            elif "/liste" in msg:
-                r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
-                text = "📋 <b>SON 10 DEPREM 🫨(GÜNCEL)</b>\n───────────────────\n"
-                for q in r["result"][:10]:
-                    text += f"▪️ <b>{q['mag']}</b> | {q['title']}\n    └ {get_risk_info(q['mag'])} | 🕒 {q['date_time'].split(' ')[1]} | 📏 {q['depth']} km\n\n"
-                tg_post(text)
+        # Komut İşleme
+        if "/start" in msg:
+            tg_post("Sistem Aktif! /deprem veya /liste yazabilirsin.", sender_id)
 
-            # --- MAÇ KOMUTLARI ---
-            elif msg.startswith("/ac"):
-                term = msg.replace("/ac", "").strip()
-                match = get_collect_match(term)
-                if match:
-                    TRACKED_MATCHES[term] = {"last_score": match['skor'], "notified": True}
-                    text = (f"🏟️ <b>MAÇ DETAYI: {match['home']} vs {match['away']}</b>\n"
-                            f"───────────────────\n"
-                            f"🥅 <b>Anlık Skor:</b> {match['skor']}\n"
-                            f"🕒 <b>Maç Durumu:</b> Oynanıyor/Bitti\n"
-                            f"✅ CollectAPI ile takibe alındı.")
-                    tg_post(text)
-                else:
-                    tg_post(f"❌ <b>{term.upper()}</b> için Süper Lig'de bugün maç bulunamadı veya isim eşleşmedi.")
-    except: pass
+        elif "/deprem" in msg:
+            r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
+            s = r["result"][0]
+            text = f"📢 <b>SON DEPREM</b>\n\n📊 <b>Büyüklük:</b> {s['mag']} ({get_risk_info(s['mag'])})\n📍 <b>Yer:</b> {s['title']}\n📏 <b>Derinlik:</b> {s['depth']} km\n⏰ <b>Saat:</b> {s['date_time']}"
+            tg_post(text, sender_id)
+
+        elif "/liste" in msg:
+            r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live").json()
+            text = "📋 <b>SON 10 DEPREM</b>\n───────────────────\n"
+            for q in r["result"][:10]:
+                text += f"▪️ <b>{q['mag']}</b> | {q['title']}\n    └ {get_risk_info(q['mag'])} | 🕒 {q['date_time'].split(' ')[1]}\n\n"
+            tg_post(text, sender_id)
+
+        elif msg.startswith("/ac"):
+            term = msg.replace("/ac", "").strip()
+            match = get_collect_match(term)
+            if match:
+                TRACKED_MATCHES[term] = {"last_score": match['skor']}
+                text = f"🏟️ <b>TAKİP BAŞLADI:</b> {match['home']} vs {match['away']}\n🥅 <b>Skor:</b> {match['skor']}"
+                tg_post(text, sender_id)
+            else:
+                tg_post(f"❌ {term.upper()} için maç bulunamadı.", sender_id)
+
+    except Exception as e:
+        print(f"Hata: {e}")
+    
     return "OK", 200
 
 @app.route('/get_data')
 def get_data():
     r_data = {"result": []}
     try:
-        # 1. Deprem Kontrolü
         r = requests.get("https://api.orhanaydogdu.com.tr/deprem/kandilli/live", timeout=8).json()
         if r.get("result"):
             r_data = r
             son = r["result"][0]
+            # Sadece büyük depremlerde otomatik gruba mesaj at
             if son["earthquake_id"] != LAST_NOTIFIED_ID[0]:
-                if float(son["mag"]) >= 1.5:
-                    tg_post(f"🔔 <b>YENİ DEPREM</b>\n\n📊 {son['mag']} ({get_risk_info(son['mag'])})\n📍 {son['title']}\n📏 <b>Derinlik:</b> {son['depth']} km")
+                if float(son["mag"]) >= 3.0:
+                    tg_post(f"🔔 <b>OTOMATİK BİLDİRİM</b>\n\n📊 {son['mag']} | {son['title']}")
                 LAST_NOTIFIED_ID[0] = son["earthquake_id"]
-
-        # 2. Maç Kontrolü
-        for t in list(TRACKED_MATCHES.keys()):
-            m = get_collect_match(t)
-            if m and m['skor'] != TRACKED_MATCHES[t]['last_score']:
-                tg_post(f"⚽ <b>GOOOOOOOLLLL!</b>\n───────────────────\n🏟️ {m['home']} {m['skor']} {m['away']}\n🥅 Skor güncellendi.")
-                TRACKED_MATCHES[t]['last_score'] = m['skor']
     except: pass
     return jsonify(r_data)
 
-if __name__ == '__main__': app.run()
+# Vercel için gerekli
+if __name__ == '__main__':
+    app.run(debug=True)
