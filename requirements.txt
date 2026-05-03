@@ -1,3 +1,2 @@
-Flask
+colorama
 requests
-python-dateutil
